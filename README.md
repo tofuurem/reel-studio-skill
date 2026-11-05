@@ -10,7 +10,7 @@
 Установи скилл reel-studio: склонируй https://github.com/tofuurem/reel-studio-skill в ~/.claude/skills/reel-studio, сначала спроси меня, ставить ли генерацию обложек через Codex CLI, затем запусти python3 -I ~/.claude/skills/reel-studio/scripts/deps.py --install (с --with covers, если я соглашусь) и доведи до DEPS_OK. То, что требует пароля, дай мне выполнить самому.
 ```
 
-Или вручную:
+Или вручную (на чистом Маке сначала `xcode-select --install`, чтобы появились `git` и `python3`):
 
 ```bash
 git clone https://github.com/tofuurem/reel-studio-skill ~/.claude/skills/reel-studio
@@ -29,6 +29,8 @@ python3 -I ~/.claude/skills/reel-studio/scripts/deps.py --install
 | macOS, Intel | всё, но Whisper без MLX медленнее, Parakeet нет |
 | Linux, WSL2 | нет Apple Vision: кадрирования по людям, титра за человеком, вырезанных обложек |
 | Windows | только через WSL2 |
+
+Remotion бесплатен для частных лиц и маленьких команд, компаниям нужна [лицензия](https://www.remotion.dev/license).
 
 LUT камеры в репозиторий не входит, подробности в [assets/luts](assets/luts/README.md).
 
