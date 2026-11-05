@@ -1,0 +1,687 @@
+{
+ "_doc": "Single source of every timing, level and layout number. Edit here, then run `python3 -I scripts/numbers_gen.py` — it rewrites references/craft/numbers.md and assets/remotion-template/src/numbers.ts. Python scripts read it through scripts/common.py (N[key]). Frames are at 30 fps on the 1080x1920 canvas (Reel2K scales by 4/3).",
+ "sections": [
+  {
+   "title": "Cuts and covering layers",
+   "rows": [
+    {
+     "key": "xfade",
+     "value": 7,
+     "what": "dissolve on every timeline cut (frames)",
+     "why": "the outgoing clip is held muted under the incoming one",
+     "used": "gen_timeline.py --xfade"
+    },
+    {
+     "key": "layerFade",
+     "value": 12,
+     "what": "board / b-roll fade in and out (frames)",
+     "why": "crossfade between boards; the timeline dissolve is a different thing",
+     "used": "BRoll, Board"
+    },
+    {
+     "key": "coverBefore",
+     "value": 8,
+     "what": "a cutaway or board over a cut starts at least this many frames before the cut",
+     "why": "the outgoing face must not peek out",
+     "used": "reelgen.py R.cover / R.cutaway / R.board"
+    },
+    {
+     "key": "coverAfter",
+     "value": 19,
+     "what": "… and ends at least this many frames after it",
+     "why": "xfade 7 + layerFade 12: its fade-out must start after the incoming shot's own dissolve, less shows a stray face or the dark carrier",
+     "used": "reelgen.py R.cover / R.cutaway / R.board"
+    },
+    {
+     "key": "montageOverlap",
+     "value": 2,
+     "what": "hard cuts inside a montage: next shot starts this many frames before the previous ends (with fadeIn/fadeOut 0)",
+     "why": "no dip to the carrier between shots",
+     "used": "gen_reel.py"
+    },
+    {
+     "key": "flashPeak",
+     "value": 0.42,
+     "what": "flash on a chapter cut, peak opacity",
+     "why": "0.85 read as a strobe",
+     "used": "ui/Flash.tsx"
+    },
+    {
+     "key": "flashFrames",
+     "value": 16,
+     "what": "flash length (frames)",
+     "why": "",
+     "used": "ui/Flash.tsx"
+    },
+    {
+     "key": "tagFrames",
+     "value": 80,
+     "what": "chapter tag on screen (frames)",
+     "why": "long enough to read two words, short enough not to become chrome",
+     "used": "ui/Chapter.tsx, reelgen.py R.chapter"
+    },
+    {
+     "key": "tagY",
+     "value": 200,
+     "what": "chapter tag top (px)",
+     "why": "above the card band",
+     "used": "ui/ChapterTag.tsx"
+    },
+    {
+     "key": "fadeFromBlack",
+     "value": 15,
+     "what": "cold open on a cutaway: FadeFromBlack (frames)",
+     "why": "the talking head must not peek on frame 0",
+     "used": "the Sequence around FadeFromBlack in gen_reel.py"
+    },
+    {
+     "key": "premount",
+     "value": 30,
+     "what": "premountFor on every media Sequence (frames)",
+     "why": "videos mount before they are shown: no black first frame in Studio, steadier renders",
+     "used": "gen_timeline.py, reelgen.py seq(premount=True)"
+    },
+    {
+     "key": "chapterLead",
+     "value": 4,
+     "what": "Chapter: the flash starts on the cut, the tag and its whoosh this many frames later (frames)",
+     "why": "the light hit reads as the cause of the tag",
+     "used": "ui/Chapter.tsx, reelgen.chapter()"
+    },
+    {
+     "key": "endTail",
+     "value": 90,
+     "what": "frames after the last word for the end card / closing plate (default)",
+     "why": "channel pill + slow fade, no «watch the previous video»",
+     "used": "reelgen.py R.write, template Reel.tsx"
+    }
+   ]
+  },
+  {
+   "title": "Captions",
+   "rows": [
+    {
+     "key": "capMaxWords",
+     "value": 8,
+     "what": "words per page",
+     "why": "two lines = fewer switches",
+     "used": "make_captions.py --max-words"
+    },
+    {
+     "key": "capMaxSec",
+     "value": 3.4,
+     "what": "seconds per page",
+     "why": "",
+     "used": "make_captions.py --max-sec"
+    },
+    {
+     "key": "capMaxChars",
+     "value": 54,
+     "what": "characters per page (spaces included)",
+     "why": "50 px Montserrat 700 in a 920 px column wraps to a third line above ~60 characters and then climbs into the card band",
+     "used": "make_captions.py --max-chars"
+    },
+    {
+     "key": "capFontPx",
+     "value": 50,
+     "what": "caption font size (px)",
+     "why": "",
+     "used": "Captions.tsx"
+    },
+    {
+     "key": "capBottomPad",
+     "value": 400,
+     "what": "caption block paddingBottom (px) → bottom line at y ≈ 1520",
+     "why": "clear of the Instagram caption/buttons",
+     "used": "Captions.tsx"
+    },
+    {
+     "key": "capBridgeMs",
+     "value": 1400,
+     "what": "gap below which two pages soft-swap (ms)",
+     "why": "a fade to zero between two phrases is the blinking line",
+     "used": "Captions.tsx"
+    },
+    {
+     "key": "capSwap",
+     "value": 4,
+     "what": "soft swap overlap (frames, linear)",
+     "why": "",
+     "used": "Captions.tsx"
+    },
+    {
+     "key": "capFade",
+     "value": 9,
+     "what": "fade in/out around a real pause (frames)",
+     "why": "",
+     "used": "Captions.tsx"
+    },
+    {
+     "key": "capHoldMs",
+     "value": 650,
+     "what": "hold after the last word (ms)",
+     "why": "",
+     "used": "Captions.tsx"
+    }
+   ]
+  },
+  {
+   "title": "Audio levels (Remotion volume; the render then sets the whole mix to the target with a static gain)",
+   "rows": [
+    {
+     "key": "targetLufs",
+     "value": -16,
+     "what": "final integrated loudness (LUFS)",
+     "why": "",
+     "used": "render.sh"
+    },
+    {
+     "key": "lufsTolerance",
+     "value": 0.5,
+     "what": "render fails if the final file is further off the target than this (LU)",
+     "why": "an auto-levelling limiter once shipped every reel at −14.9",
+     "used": "render.sh"
+    },
+    {
+     "key": "sourceLufs",
+     "value": -24,
+     "what": "each speech source after match_loudness.py (LUFS over its used ranges)",
+     "why": "takes from different mics sit at one level",
+     "used": "match_loudness.py"
+    },
+    {
+     "key": "bedUnder",
+     "value": 0.18,
+     "what": "music bed under speech",
+     "why": "≈ 20 LU down",
+     "used": "MusicBed"
+    },
+    {
+     "key": "bedOpen",
+     "value": 0.3,
+     "what": "bed in the cold open, wordless pauses and the tail",
+     "why": "",
+     "used": "MusicBed"
+    },
+    {
+     "key": "bedTailSec",
+     "value": 15,
+     "what": "bed length = cut list totalFrames / 30 + this (s)",
+     "why": "covers the end card and the fade",
+     "used": "make_bed.sh"
+    },
+    {
+     "key": "sfxWhoosh",
+     "value": 0.22,
+     "what": "whoosh on a chapter tag",
+     "why": "",
+     "used": "Chapter, Sfx"
+    },
+    {
+     "key": "sfxSoftWhoosh",
+     "value": 0.14,
+     "what": "soft whoosh on a scan or slide (0.12–0.16)",
+     "why": "",
+     "used": "Sfx"
+    },
+    {
+     "key": "sfxDone",
+     "value": 0.22,
+     "what": "done.wav when a result lands (0.2–0.24)",
+     "why": "",
+     "used": "Sfx"
+    },
+    {
+     "key": "sfxPop",
+     "value": 0.2,
+     "what": "pop.wav on a chip, badge or mark (0.18–0.22)",
+     "why": "",
+     "used": "Sfx"
+    },
+    {
+     "key": "sfxTick",
+     "value": 0.32,
+     "what": "tick.wav while a number counts (0.3–0.35; 0.5 only for a lone timer)",
+     "why": "",
+     "used": "Sfx"
+    },
+    {
+     "key": "sfxTickEvery",
+     "value": 6,
+     "what": "tick spacing while counting (frames)",
+     "why": "",
+     "used": "gen_reel.py"
+    },
+    {
+     "key": "bleepGain",
+     "value": -18,
+     "what": "soft bleep peak (dBFS)",
+     "why": "−16 read as loud",
+     "used": "bleep.py --gain"
+    },
+    {
+     "key": "sfxFrames",
+     "value": 45,
+     "what": "length of one Sfx sequence (frames)",
+     "why": "long enough for the decay of every sound in audio/sfx",
+     "used": "reelgen.sfx()"
+    },
+    {
+     "key": "bedRamp",
+     "value": 15,
+     "what": "frames the bed takes to move between bedUnder and bedOpen",
+     "why": "a jump in the bed level is heard as a cut",
+     "used": "ui/Sfx.tsx MusicBed"
+    },
+    {
+     "key": "bedFadeOut",
+     "value": 24,
+     "what": "bed fade at the very end of the reel (frames)",
+     "why": "",
+     "used": "ui/Sfx.tsx MusicBed"
+    },
+    {
+     "key": "sfxHit",
+     "value": 0.9,
+     "what": "impact on the drop / a punch (action reel)",
+     "why": "the one sound that marks the big moment; everything else is the track's",
+     "used": "Sfx kind=hit"
+    },
+    {
+     "key": "sfxShutter",
+     "value": 0.6,
+     "what": "camera shutter (a photo moment, a freeze)",
+     "why": "",
+     "used": "Sfx kind=shutter"
+    },
+    {
+     "key": "sfxRewind",
+     "value": 0.55,
+     "what": "tape rewind (a replay, a «back to…» cut)",
+     "why": "",
+     "used": "Sfx kind=rewind"
+    },
+    {
+     "key": "sfxRiser",
+     "value": 0.35,
+     "what": "rising noise into a drop or a reveal (0.9 s, ends on the frame it is placed + 27)",
+     "why": "",
+     "used": "Sfx kind=riser"
+    },
+    {
+     "key": "sfxBeep",
+     "value": 0.3,
+     "what": "short electronic beep (a low battery, a warning)",
+     "why": "",
+     "used": "Sfx kind=beep"
+    },
+    {
+     "key": "sfxPowerdown",
+     "value": 0.6,
+     "what": "falling tone (the camera dies, the end)",
+     "why": "",
+     "used": "Sfx kind=powerdown"
+    },
+    {
+     "key": "sfxVariants",
+     "value": 3,
+     "what": "variants made of every whoosh / pop / hit (whoosh, whoosh2, whoosh3 …); reelgen.sfx cycles them",
+     "why": "«одинаковый вжух на каждый переход — странно» (Halloween reel): the same sample twice in a row reads as a template",
+     "used": "make_sfx.sh, reelgen.sfx()"
+    }
+   ]
+  },
+  {
+   "title": "Layout (px on 1080x1920)",
+   "rows": [
+    {
+     "key": "safeTop",
+     "value": 180,
+     "what": "nothing important above this y",
+     "why": "Instagram header",
+     "used": "theme.ts safe"
+    },
+    {
+     "key": "safeBottom",
+     "value": 1560,
+     "what": "nothing important below this y",
+     "why": "caption text, buttons",
+     "used": "theme.ts safe"
+    },
+    {
+     "key": "safeRight",
+     "value": 90,
+     "what": "right strip reserved for the like/comment buttons (px)",
+     "why": "",
+     "used": "theme.ts safe"
+    },
+    {
+     "key": "safeX",
+     "value": 64,
+     "what": "side margin of panels and cards",
+     "why": "",
+     "used": "theme.ts safe"
+    },
+    {
+     "key": "cardTop",
+     "value": 300,
+     "what": "default top of a card in the top band",
+     "why": "below the chapter tag (y 200–280), above a medium-shot face",
+     "used": "ui/Card.tsx"
+    },
+    {
+     "key": "bandTop",
+     "value": 300,
+     "what": "board content band, top",
+     "why": "",
+     "used": "Board"
+    },
+    {
+     "key": "bandBottom",
+     "value": 1350,
+     "what": "board content band, bottom",
+     "why": "captions sit below 1400",
+     "used": "Board"
+    },
+    {
+     "key": "stampMaxPx",
+     "value": 92,
+     "what": "stamp font size when rotated (max)",
+     "why": "",
+     "used": "ui/Stamp.tsx"
+    },
+    {
+     "key": "minTextPx",
+     "value": 28,
+     "what": "smallest text on screen",
+     "why": "≈ 10 pt on a phone; smaller is unreadable",
+     "used": "lint_reel.py"
+    },
+    {
+     "key": "punchDrift",
+     "value": 0.04,
+     "what": "slow push-in added on top of the punch zoom",
+     "why": "face zones are corrected by punch + drift",
+     "used": "Clip.tsx, face_zones.py"
+    },
+    {
+     "key": "punchCenterY",
+     "value": 730,
+     "what": "punch zoom origin y",
+     "why": "eye line of a vertical talking head",
+     "used": "Clip.tsx, face_zones.py"
+    },
+    {
+     "key": "coverCrop34Top",
+     "value": 240,
+     "what": "cover 3:4 grid crop, top (bottom 1680)",
+     "why": "Instagram profile grid",
+     "used": "Cover.tsx guides"
+    },
+    {
+     "key": "coverCrop11Top",
+     "value": 420,
+     "what": "cover 1:1 crop, top (bottom 1500); faces and the word stay inside",
+     "why": "old square grid",
+     "used": "Cover.tsx guides"
+    }
+   ]
+  },
+  {
+   "title": "Proxies",
+   "rows": [
+    {
+     "key": "proxyCrf",
+     "value": 18,
+     "what": "x264 CRF of the proxies",
+     "why": "",
+     "used": "make_proxies.py --crf"
+    },
+    {
+     "key": "proxyPadSec",
+     "value": 2,
+     "what": "--trim-to-cutlist pad on each side of the used range (s)",
+     "why": "room for dissolves and small re-cuts without re-encoding",
+     "used": "make_proxies.py"
+    },
+    {
+     "key": "jpegQuality",
+     "value": 92,
+     "what": "Remotion frame JPEG quality",
+     "why": "80 bands dark gradients",
+     "used": "remotion.config.ts"
+    }
+   ]
+  },
+  {
+   "title": "People-aware crop (16:9 camera → 9:16 canvas)",
+   "rows": [
+    {
+     "key": "peopleFps",
+     "value": 4,
+     "what": "frames per second people_zones.py samples from the source",
+     "why": "a person crossing the frame in ~1 s is seen 4 times; 10 s of 4K scan in ≈ 3 s",
+     "used": "people_zones.py --fps"
+    },
+    {
+     "key": "peopleMinConf",
+     "value": 0.3,
+     "what": "lowest Vision confidence for a person box",
+     "why": "lower picks up posters and dark shapes",
+     "used": "people_zones.py"
+    },
+    {
+     "key": "peopleFitMargin",
+     "value": 0.9,
+     "what": "share of the crop width the chosen people may fill",
+     "why": "a person touching both crop edges looks cut off",
+     "used": "people_zones.py"
+    },
+    {
+     "key": "peopleNearArea",
+     "value": 0.25,
+     "what": "a second person joins the crop only if their box is ≥ this share of the main one",
+     "why": "small background crowd must not pull the crop away from the subject",
+     "used": "people_zones.py"
+    },
+    {
+     "key": "peopleStickyArea",
+     "value": 0.5,
+     "what": "the crop keeps its person while they are at least this share of the biggest one",
+     "why": "a standing and a crouching person swap «biggest» every few frames; without stickiness the crop swings between them",
+     "used": "people_zones.py"
+    },
+    {
+     "key": "peopleSmoothSec",
+     "value": 0.8,
+     "what": "smoothing window of the per-frame crop centre (s)",
+     "why": "one missed or wrong detection must not jerk the crop",
+     "used": "people_zones.py"
+    },
+    {
+     "key": "peoplePanMin",
+     "value": 0.05,
+     "what": "subject movement (share of the frame width) below which the crop is one fixed centre",
+     "why": "a still shot that wobbles a few pixels reads as a shaky camera",
+     "used": "people_zones.py"
+    },
+    {
+     "key": "peoplePanSpeed",
+     "value": 0.35,
+     "what": "fastest crop pan (frame widths per second)",
+     "why": "following a quick move faster than this looks like a glitch",
+     "used": "people_zones.py"
+    },
+    {
+     "key": "peopleKeyEvery",
+     "value": 0.5,
+     "what": "seconds between crop keyframes of a panning segment",
+     "why": "enough to follow a walk, few enough for one ffmpeg expression per proxy",
+     "used": "people_zones.py → make_proxies.py"
+    }
+   ]
+  },
+  {
+   "title": "Cut from the transcript (whole scenes)",
+   "rows": [
+    {
+     "key": "snapBack",
+     "value": 6.0,
+     "what": "a range that starts inside a sentence grows back to its start, at most this many seconds",
+     "why": "Halloween vlog v2: «фразы обрезанные посередине» — a line that starts mid-thought reads as a mistake",
+     "used": "cut_from_transcript.py"
+    },
+    {
+     "key": "snapFwd",
+     "value": 4.5,
+     "what": "a range that ends inside a sentence grows forward to its end, at most this many seconds",
+     "why": "same; forward is shorter — the punchline is usually already in",
+     "used": "cut_from_transcript.py"
+    },
+    {
+     "key": "snapJoin",
+     "value": 0.8,
+     "what": "a pause at least this long counts as a sentence edge even without .?!… (s)",
+     "why": "Parakeet / Whisper often drop the full stop of spoken Russian",
+     "used": "cut_from_transcript.py"
+    },
+    {
+     "key": "splitWindowSec",
+     "value": 25,
+     "what": "ranges of one take further apart than this get their own alias proxy (s)",
+     "why": "make_proxies encodes one window per clip: c0080 was 509 s of 4K for 70 s used",
+     "used": "cut_from_transcript.py → make_proxies.py"
+    }
+   ]
+  },
+  {
+   "title": "Voice bus (two mics, levels, taming)",
+   "rows": [
+    {
+     "key": "dualmicAtten",
+     "value": 12,
+     "what": "DeepFilterNet noise reduction limit per lav channel (dB)",
+     "why": "full strength left a hollow «из толчка» voice (A/B by ear, Halloween vlog)",
+     "used": "dualmic.py"
+    },
+    {
+     "key": "dualmicHard",
+     "value": 3.0,
+     "what": "automix exponent: channel gain ∝ power^(this/2) share",
+     "why": "pushes the far mic's late copy of a voice down (comb filtering)",
+     "used": "dualmic.py"
+    },
+    {
+     "key": "voiceTargetDb",
+     "value": -22.0,
+     "what": "active speech level of every clip before the render's static gain (dBFS)",
+     "why": "clips varied by up to 25 dB between cameras and mics",
+     "used": "voice_mix.py"
+    },
+    {
+     "key": "voiceMaxGain",
+     "value": 9.0,
+     "what": "most a quiet clip is lifted (dB)",
+     "why": "+18 dB lifted mic hiss and DeepFilterNet artefacts into «a speaker about to blow»",
+     "used": "voice_mix.py"
+    },
+    {
+     "key": "voiceSegLo",
+     "value": -26.0,
+     "what": "a speech segment quieter than this is lifted (dBFS)",
+     "why": "a whisper inside a loud clip",
+     "used": "voice_mix.py"
+    },
+    {
+     "key": "voiceSegHi",
+     "value": -19.0,
+     "what": "a speech segment louder than this is lowered (dBFS)",
+     "why": "a shout inside a calm clip",
+     "used": "voice_mix.py"
+    },
+    {
+     "key": "voiceSegMax",
+     "value": 4.0,
+     "what": "most a single segment is moved (dB)",
+     "why": "±10 dB per segment pumped the noise floor",
+     "used": "voice_mix.py"
+    },
+    {
+     "key": "ambDb",
+     "value": -30.0,
+     "what": "camera sound under a picture beat (\"amb\"), active level (dBFS)",
+     "why": "a dance or a ride in digital silence feels dead in a vlog without music",
+     "used": "voice_mix.py"
+    },
+    {
+     "key": "rawDb",
+     "value": -22.0,
+     "what": "camera sound instead of the voice (\"raw\") (dBFS)",
+     "why": "DeepFilterNet swallowed a voice inside a costume",
+     "used": "voice_mix.py"
+    },
+    {
+     "key": "tameOverDb",
+     "value": 6.0,
+     "what": "compressor threshold above voiceTargetDb (dB)",
+     "why": "a shout into a close lav sat 7 dB over the speech",
+     "used": "voice_mix.py"
+    },
+    {
+     "key": "tameRatio",
+     "value": 3.0,
+     "what": "compressor ratio above the threshold",
+     "why": "gentle: the shout stays a shout",
+     "used": "voice_mix.py"
+    },
+    {
+     "key": "tameCeilDb",
+     "value": -12.0,
+     "what": "look-ahead limiter ceiling before the render gain (dBFS)",
+     "why": "render.sh adds ≈ +9 dB; a 5 ms hard limiter on top crackled («колонки хрипят»)",
+     "used": "voice_mix.py"
+    }
+   ]
+  },
+  {
+   "title": "Picture: night lift, action pieces",
+   "rows": [
+    {
+     "key": "nightStrong",
+     "value": 20,
+     "what": "mean luma (0–255) below which a clip gets the strong shadow lift",
+     "why": "night street clips came out of the LUT almost black on a phone",
+     "used": "night_lift.py"
+    },
+    {
+     "key": "nightMedium",
+     "value": 40,
+     "what": "… the medium lift",
+     "why": "bar and porch clips: faces in the mud",
+     "used": "night_lift.py"
+    },
+    {
+     "key": "nightMild",
+     "value": 50,
+     "what": "… the mild lift; brighter clips are untouched",
+     "why": "a global grade washed out the day clips",
+     "used": "night_lift.py"
+    },
+    {
+     "key": "actionSlowmo",
+     "value": 0.9,
+     "what": "a piece slower than this is retimed with motion-compensated interpolation (minterpolate)",
+     "why": "the browser only repeats frames: 40 % slow motion of a 25 fps clip stuttered",
+     "used": "actiongen.py"
+    },
+    {
+     "key": "actionPhraseBars",
+     "value": 4,
+     "what": "bars per musical phrase on the reel grid (whips and big moments go on phrase starts)",
+     "why": "Cudi «Pursuit Of Happiness (Nightmare)»: sections every 4 bars from the drop (frames 218/468/718/967/1217)",
+     "used": "track_beats.py, actiongen.py"
+    }
+   ]
+  }
+ ]
+}

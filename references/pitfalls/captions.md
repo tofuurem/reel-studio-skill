@@ -1,0 +1,18 @@
+# Captions and transcription
+
+Whisper and Parakeet behaviour, caption pages, brands, patches. Each item cost real time on a production (2026-10-09 … 2026-10-21); read the file of the area you are about to touch.
+
+- One- or two-word pages ("что", "типа, на") with pauses around them make the subtitle line blink; `make_captions.py` glues them to the next phrase and `Captions.tsx` holds a page until the next one if the gap is <1.4 s.
+- whisper splits words ("Яндекс" + ".Облаке", "туда" + "-назад") — glue tokens that lack a leading space.
+- Karaoke word highlighting was rejected ("акцент уходит на субтитры"). Calm phrases, ≤8 words on two lines, soft swap between phrases (see the soft page swap in this file).
+- Brand names come out lowercase/cyrillic ("дот") — `brands.json`.
+- Low-confidence words (<0.4) are usually fillers; check them against the audio context before trusting a caption.
+- **Caption "blink" that survived the bridging fix** was the page switch itself: page N faded to 0 over its last 5 frames while page N+1 faded in from 0 — a brightness dip at every phrase change, worst where phrases are short (under a timer card). Fix in `Captions.tsx`: bridged pages overlap by `SWAP` (4) frames with linear fades (opacity sum ≈ 1) and a 6 px rise; only a real pause gets the 9-frame appear/disappear. Two-line pages (8 words / 3.4 s / 54 characters, the `make_captions.py` defaults) halve the switches.
+- **Whisper on the new timeline**: hallucinates in silent tails ("Продолжение следует…", "Субтитры создавал …" on the music bed) → drop tokens after the speech end; it can also drop a quiet word after a long pause ("я стараюсь не… [делать]") — compare with the first transcription and patch the token text.
+- `transcribe.py` used to whisper every file in `reel/public/audio` — the music bed too (minutes wasted, hallucinated JSON). It now mixes only the CapCut voiceovers listed in the cut list into the timeline audio.
+- **Whisper on voiceover**: «из Tripo» → «стрипа», «Итого» → «Год», «Ходьба» → «Сходьба», «делов-то» → «делал лофта». Every take needs a read-through against the script and `caption_patches.json`; one occurrence of a common token is fixed with `replace_at`, never with a global `replace`.
+- **Measured on a 3-min pool monologue:** Parakeet 3.4 s vs Whisper turbo 18.5 s; Whisper looped («Мстат» ×20) in long pauses and wrote «Субтитры сделал DimaTorzok» on silent clips; Parakeet produced clean sentences on dense speech but glued phrases across long pauses into one 80-s sentence (word times are still right) and misheard a few quiet words that Whisper got. Hence: Parakeet for the map, Whisper for captions on the cut timeline.
+- **Three-line captions** (audit 2026-10-22): pages were capped by words and seconds only; 62–74-character pages wrapped to three lines and the block climbed to y ≈ 1340, into the board and card band. `make_captions.py --max-chars 54` splits them; `Captions.tsx` shrinks a page that still does not fit two lines.
+- **The last caption vanished at full opacity** when the last word ended at SPEECH_END: the page's hold ran past its Sequence. `Captions.tsx` clamps pages to the sequence and fades the last one.
+- **CapCut voiceovers had no captions and no `fw()` anchors**: they were transcribed to separate files that nothing read. `transcribe.py` mixes them into the timeline audio now.
+- **Anchors on misheard words** (`fw("tripa")` in ep2) because `tl_words.py` ignored `brands.json` and the patches; it applies both now — anchor on the corrected word.
