@@ -1,0 +1,17 @@
+# Input: a CapCut draft
+
+Use when the user edited the video in CapCut and wants it upgraded. Their cut is final: same segments, mutes, speeds, framing and voiceover placement.
+
+1. `python3 -I $S/capcut_export.py --list` — the most recently modified draft is usually the one; confirm it in the intake question.
+2. `python3 -I $S/capcut_export.py --draft "<name>" --out work/` → `EXPORT_DONE`, `work/cutlist.json`, `work/draft_summary.md` (`--draft` also takes a full folder path).
+3. Read the summary: segments with frames, mutes (0.3 s slivers that hide clicks), speeds, framing (`transform` scale/position/rotation/flip and `crop` per segment — `gen_timeline.py` reproduces them as `Clip framing` / `crop`; position and scale were checked on real drafts, rotation direction and crop were not: compare one still per rotated or cropped segment with CapCut), the LUT, overlay tracks (the user's planned screenshot inserts), voiceovers recorded in CapCut, b-roll candidates, warnings: unmounted volume, keyframes (animated framing is NOT reproduced — tell the user which segments), overlay video tracks (PiP: place them by hand as a `Clip` with `framing` in a Sequence), photos on the main track, text tracks (their titles are not imported — rebuild the ones the user wants with `TitleCard` / `Card`). Stop and ask when sources are missing — never render black.
+4. Screenshots dragged into CapCut straight from the screenshot tool live in a temp folder Claude cannot read: ask for copies in `assets/screens/` (or `ingest.py` them from wherever the user keeps them).
+5. Inventory and b-roll: `python3 -I $S/inventory.py <project> <the cut list's sources>`; scout neighbours with `$S/folder_sheet.sh "<shoot folder>" "$PWD/work/sheet.jpg" "$LUT"` (absolute output — the script cd's into the folder) on the shoot folder and its neighbours; only short clips of hands, screens and places are cutaways, and only if the user's own cut does not already show the same thing.
+6. Voiceovers recorded in CapCut: in the core pipeline's voice step isolate them together with the camera sources (`voice_isolate.sh` on the camera files and the `.aac` files in the cut list's `voiceovers`), then one `match_loudness.py` → `work/voice/matched/` + `reel/public/audio/<name>.m4a`. `transcribe.py` mixes them into the timeline audio, so they get captions and `fw()` anchors. In `gen_reel.py` add `*R.capcut_voiceovers()` to the body: one `<Audio>` Sequence per voiceover at the frames and trim the draft gave it (`cutlist.tracks`, type audio).
+7. Overlay inserts (photos and screenshots on upper tracks) are the user's planned pictures: place them as `ImageCard` (over the head, in `R.free_bottom` / `R.free_top`) or `Win` on a `Board` at the frames `draft_summary.md` lists.
+8. Profanity: after transcribing, `python3 -I $S/bleeps_from_timeline.py` writes `work/bleeps.json`.
+9. Continue with the core pipeline from step 1 (voice). `gen_timeline.py` keeps the draft's framing and adds neither punch zoom nor the slow drift; check one still per reframed segment against CapCut.
+
+Draft anatomy (tracks, segments, materials, effects): `inputs/capcut-draft-format.md`. Traps: `pitfalls/sources-and-footage.md`, `pitfalls/cut-and-timeline.md`.
+
+A draft can also be only a recorder: voice takes made in CapCut's voice recorder are in `…/com.lveditor.draft/<draft>/audio_record/`, and the audio tracks of that draft hold the user's trims (which part of a take they consider good). For such a project follow `inputs/voiceover.md`.
