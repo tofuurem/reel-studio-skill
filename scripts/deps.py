@@ -60,6 +60,8 @@ def plat():
         # python under Rosetta reports x86_64 on an M-series Mac
         p["apple_silicon"] = m == "arm64" or run(["sysctl", "-n", "sysctl.proc_translated"]).stdout.strip() == "1"
         p["name"] = f"macOS {platform.mac_ver()[0]} " + ("Apple Silicon" if p["apple_silicon"] else "Intel")
+        for d in ("/opt/homebrew/bin", "/usr/local/bin"):   # a fresh Homebrew is not on PATH until `brew shellenv` runs in the shell profile
+            if os.path.exists(os.path.join(d, "brew")) and d not in os.environ["PATH"].split(os.pathsep): os.environ["PATH"] = d + os.pathsep + os.environ["PATH"]
         p["pm"] = "brew" if shutil.which("brew") else None
     elif s == "Linux":
         p["apple_silicon"] = False
