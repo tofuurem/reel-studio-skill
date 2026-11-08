@@ -24,3 +24,10 @@ Kit
 - `ui/` — Card, ChapterTag, Chapter (flash + tag + whoosh), Flash, Fade (FadeFromBlack/FadeToBlack), Stamp, Mark,
   ChipRow/ChipBand, Chat (Bubble, ChatCard, TypingDots, Strike), Sfx/MusicBed, anim (inAt, outBefore, envelope, sp, steps…).
 - `Cover.tsx` — CoverFrame, ArtCover, Cut, Badge, FloorShadow (stills; register them in Root.tsx).
+
+Blocks (`blocks/`, ready-made devlog beats; when and how: references/craft/blocks.md; preview: the `BlocksDemo` composition)
+- `CodeDiff` (removed lines strike and collapse, added lines open up), `CodeTyping` (typed with a caret), `RepoCard` /
+  `RepoList` (repository cards, stars count up), `Notify` / `NotifyStack` (the newest pushes the others down), `LowerThird`
+  (`mask` / `bar`), `BeforeAfter` (wipe between two images or two JSX panels).
+- Same cue names as above; `until` defaults to the last 8 frames of the Sequence; layout in 1080-wide px (Reel2K scales).
+  Shared helpers (`blockLife`, `codeTokens`, `CodePanel`) live in `blocks/shared.tsx`.

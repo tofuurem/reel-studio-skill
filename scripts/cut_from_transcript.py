@@ -27,7 +27,7 @@ Plan-level keys (all optional):
                   short window per group instead of one window over the whole take (c0080: 509 s of 4K for 70 s used).
 Opts per range: exact, snap (false: no growth), gaps (true: no pause split), transition ("whip"; default dissolve in
   gen_timeline), cropX (9:16 crop centre 0–1 or [from, to]: overrides people_zones.py), audioFadeIn (frames, when a cut lands
-  inside a word), mute (the segment plays silent — always exact seconds, needs no words), amb (a picture beat: voice_mix.py
+  inside a word), mute (the segment plays silent — always exact seconds, needs no words), amb (a picture beat: dialogue.py
   lays the camera's own sound under it), raw (camera sound instead of the cleaned voice), speed (e.g. 1.5 — a picture beat
   played faster; slow motion belongs to the action-reel pieces, the browser only repeats frames), punch, title/chapter/…
   (anything else is kept on the segment for gen_reel.py).
@@ -141,7 +141,7 @@ if WIN > 0:
             if not os.path.lexists(link): os.symlink(src, link)
             files[alias] = link; alias_of[clip_id(link)] = clip_id(files[clip])
             if clip in words_files: words_files[alias] = words_files[clip]; words[alias] = words[clip]
-            for vd in ("voice/out", "voice/matched"):   # the cleaned voice of the take serves the alias too
+            for vd in ("voice/out",):   # the cleaned voice of the take serves the alias too
                 d = os.path.join(OUT, vd); bv = f"{clip_id(files[clip])}_DeepFilterNet3.wav"; av = f"{clip_id(link)}_DeepFilterNet3.wav"
                 if os.path.isdir(d) and not os.path.lexists(os.path.join(d, av)): os.symlink(bv, os.path.join(d, av))
             if clip in VOICE: VOICE[alias] = VOICE[clip]

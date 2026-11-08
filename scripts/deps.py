@@ -47,6 +47,7 @@ PKG = {   # tool → package per manager (None: comes with the OS)
     "curl": {"brew": None, "apt": "curl ca-certificates", "dnf": "curl", "pacman": "curl"},
     "uv": {"brew": "uv", "pacman": "uv"},                                     # elsewhere: astral's user-level installer
     "heif-convert": {"apt": "libheif-examples", "dnf": "libheif-tools", "pacman": "libheif"},
+    "yt-dlp": {"brew": "yt-dlp"},                                             # brew brings deno (YouTube); distro packages lag behind the sites
 }
 
 def run(cmd, **kw):
@@ -92,11 +93,13 @@ def venv_specs(p):
         vis = (["Vision", "Quartz", "Foundation"], ["pyobjc-framework-Vision", "pyobjc-framework-Quartz"])
     else:
         asr, vis = (["whisper"], ["openai-whisper"]), ([], [])
+    # person_matte.py --mode birefnet (title behind a person WITH headphones / glasses / props): BiRefNet through transformers
+    mat = (["torch", "torchvision", "transformers", "timm", "kornia", "einops"], ["torch", "torchvision", "transformers", "timm", "kornia", "einops"])
     specs = {
-        "venv": ("3.12", ["numpy", *asr[0], *vis[0]], ["numpy", *asr[1], *vis[1]], None if p["apple_silicon"] or p["mac"] else cpu_torch,
-                 "transcribe.py (Whisper), numpy scripts" + (", Apple Vision" if p["mac"] else "")),
+        "venv": ("3.12", ["numpy", *asr[0], *vis[0], *mat[0]], ["numpy", *asr[1], *vis[1], *mat[1]], None if p["apple_silicon"] or p["mac"] else cpu_torch,
+                 "transcribe.py (Whisper), numpy scripts, person_matte.py (BiRefNet)" + (", Apple Vision" if p["mac"] else "")),
         "dfvenv": ("3.11", ["df", "torchaudio", "soundfile"], ["deepfilternet", "soundfile", "torch==2.4.1", "torchaudio==2.4.1"], cpu_torch,
-                   "DeepFilterNet voice cleanup, dualmic.py, voice_mix.py"),
+                   "voice_clean.py, dualmic.py, dialogue.py"),
     }
     if p["apple_silicon"] and parakeet_model():
         specs["pkvenv"] = ("3.12", ["parakeet_mlx", "gguf"], ["parakeet-mlx", "gguf"], None, "transcribe_parakeet.py (first-pass map of raw clips)")
@@ -163,6 +166,9 @@ def check(p, want_covers=False):
         R.add(not miss, "chrome libs", "for Remotion's headless Chrome" + (f" — missing {', '.join(miss)}" if miss else ""), ("libs", miss) if miss else None)
         hc = bool(shutil.which("heif-convert") or shutil.which("magick"))
         R.add(hc, "heif-convert", "" if hc else "ingest.py converts iPhone HEIC photos with it", sys_fix("heif-convert"), required=False)
+    yv = ver(["yt-dlp", "--version"], r"(\S+)")
+    R.add(bool(yv), "yt-dlp", (yv + ("" if shutil.which("deno") else " — no deno: YouTube links fail")) if yv else "fetch.py: a reference reel or a track by link",
+          sys_fix("yt-dlp") or ("manual", "uv tool install 'yt-dlp[default]' && curl -fsSL https://deno.land/install.sh | sh   (deno: YouTube)"), required=False)
     # --- python envs (shared, built by --install / setup_env.sh)
     for name, (pyv, mods, pkgs, idx, what) in venv_specs(p).items():
         py = os.path.join(CACHE, name, "bin", "python")

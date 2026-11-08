@@ -12,6 +12,11 @@ rotation, then the x / y offset in half-canvas units, y up), then the punch zoom
 unzoomed boxes landed on chins (birthday reel).
 Bands start at numbers.json cardTop (y 300, below the chapter tag) and end at bandBottom (y 1350, above the captions).
 Muted b-roll / no-face segments get the full band. Cards must not cover the face; this replaces eyeballing contact sheets.
+A landscape canvas (cut list "canvas" 16:9, 1920×1080) — hermes-worker reel, 2026-11-06, where the 9:16 math reported faces
+at y 1636 of 1080 and no x at all: boxes are mapped onto 1920×1080, every segment is sampled each --every s (default 0.5,
+handheld shots wander), faces smaller than 60 px (a video call on a laptop screen) are ignored, and each row also carries
+faceLeft / faceRight, freeLeft / freeRight (x ranges inside wideMargin) and `side` — the wider free side for cards
+("left" / "right", "none" when neither is 420 px wide). reelgen: R.free_side(a, b). Bands use wideBandTop / wideBandBottom.
 """
 import argparse, json, math, os, subprocess, sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -66,11 +71,30 @@ def detect(img_path):
         b = r.boundingBox(); out.append({"x": b.origin.x, "y": 1 - b.origin.y - b.size.height, "w": b.size.width, "h": b.size.height})   # 0–1 of the frame
     return out
 
+def wide_zone(faces):
+    """16:9 canvas: the head box (face ±, hair) over all samples and the free strips left / right of it and above / below it."""
+    m, top0, bot0 = N["wideMargin"], N["wideBandTop"], N["wideBandBottom"]
+    if not faces:
+        return {"faceTop": None, "faceBottom": None, "faceLeft": None, "faceRight": None, "faceSize": 0, "shot": "no-face",
+                "freeTop": [top0, bot0], "freeBottom": [top0, bot0], "freeLeft": [m, W - m], "freeRight": [m, W - m], "side": "any"}
+    size = max(f["h"] for f in faces)
+    l = max(0, int(min(f["x"] for f in faces) - size * 0.3)); r = min(W, int(max(f["x"] + f["w"] for f in faces) + size * 0.3))
+    t = max(0, int(min(f["y"] for f in faces) - size * 0.45)); b = min(H, int(max(f["y"] + f["h"] for f in faces) + size * 0.25))
+    fl = [m, max(m, l - 40)]; fr = [min(W - m, r + 40), W - m]
+    wl, wr = fl[1] - fl[0], fr[1] - fr[0]
+    side = ("left" if wl >= wr else "right") if max(wl, wr) >= 420 else "none"
+    return {"faceTop": t, "faceBottom": b, "faceLeft": l, "faceRight": r, "faceSize": size, "shot": "close" if size > 300 else "medium" if size > 180 else "wide",
+            "freeTop": [top0, max(top0, t - 40)], "freeBottom": [min(bot0, b + 40), bot0], "freeLeft": fl, "freeRight": fr, "side": side}
+
 def main():
     ap = argparse.ArgumentParser(); ap.add_argument("--cutlist", default="work/cutlist.json"); ap.add_argument("--public", default="reel/public"); ap.add_argument("--out", default="work/face_zones.json")
     ap.add_argument("--zoom", default=None, help="default: timeline_zoom.json next to the cut list")
+    ap.add_argument("--every", type=float, default=None, help="sample every N source seconds (default: 20/50/80 %% of a segment on 9:16, every 0.5 s on 16:9)")
     a = ap.parse_args()
+    global W, H
     cl = json.load(open(a.cutlist)); OFFSETS = load_offsets(a.cutlist)
+    cv = cl.get("canvas") or {}; W, H = int(cv.get("w", 1080)), int(cv.get("h", 1920)); wide = W > H
+    every = a.every if a.every is not None else (0.5 if wide else 0)
     if cl.get("silent"): json.dump([], open(a.out, "w")); print("silent cut list: no faces"); print("FACE_ZONES_DONE", a.out); return
     zoom = load_json(a.zoom or os.path.join(os.path.dirname(a.cutlist) or ".", "timeline_zoom.json"), {})
     if not zoom: print("WARNING: no timeline_zoom.json (run gen_timeline.py first) — boxes are unzoomed")
@@ -79,11 +103,16 @@ def main():
         if s.get("materialType", "video") != "video": continue
         z = seg_for(zoom, s["fromFrame"]); faces_all = []; proxy = proxy_file(a.public, clip_id(s['path'])); pw, ph = proxy_size(proxy)
         drift_default = float((zoom or {}).get("drift", N["punchDrift"]))
-        for frac in (0.2, 0.5, 0.8):
-            t = s["srcStart"] - OFFSETS.get(clip_id(s["path"]), 0) + src_dur(s) * frac; img_path = f"work/faces/seg{i:02d}_{int(frac*100)}.jpg"
+        d = src_dur(s)
+        fracs = [(k + 0.5) * every / d for k in range(max(1, min(24, int(d / every))))] if every > 0 and d > 0 else [0.2, 0.5, 0.8]
+        for frac in fracs:
+            t = s["srcStart"] - OFFSETS.get(clip_id(s["path"]), 0) + d * frac; img_path = f"work/faces/seg{i:02d}_{int(frac*1000):04d}.jpg"
             subprocess.run(["ffmpeg", "-v", "error", "-nostdin", "-y", "-ss", str(t), "-i", proxy, "-frames:v", "1", "-vf", "scale=540:-1", img_path], check=True)
-            faces_all += [to_screen(b, z, pw, ph, drift_default) for b in detect(img_path)]
-        if faces_all:
+            boxes = [to_screen(b, z, pw, ph, drift_default) for b in detect(img_path)]
+            faces_all += [f for f in boxes if f["h"] >= 60] if wide else boxes   # 16:9: a video call on a laptop screen is not the speaker
+        if wide:
+            zone = wide_zone(faces_all)
+        elif faces_all:
             top = min(f["y"] for f in faces_all); bottom = max(f["y"] + f["h"] for f in faces_all); size = max(f["h"] for f in faces_all)
             # head incl. hair ≈ 1.6× the face box; keep 40 px margin
             head_top = max(0, int(top - size * 0.45)); head_bottom = int(bottom + size * 0.25)
@@ -92,7 +121,8 @@ def main():
         else:
             zone = {"faceTop": None, "faceBottom": None, "faceSize": 0, "shot": "no-face", "freeTop": [N["cardTop"], N["bandBottom"]], "freeBottom": [N["cardTop"], N["bandBottom"]]}
         zone.update({"seg": i, "clip": clip_id(s["path"]), "fromFrame": s["fromFrame"], "durFrames": s["durFrames"], "zoom": round(float(z.get("zoom", 1)) + float(z.get("drift", drift_default)), 3)}); rows.append(zone)
-        print(f"{i:2d} {zone['clip']} from={s['fromFrame']:5d} zoom {zone['zoom']:.2f} {zone['shot']:7s} face y {zone['faceTop']}–{zone['faceBottom']} | free top {zone['freeTop']} bottom {zone['freeBottom']}")
+        if wide: print(f"{i:2d} {zone['clip']} from={s['fromFrame']:5d} {zone['shot']:7s} face x {zone['faceLeft']}–{zone['faceRight']} y {zone['faceTop']}–{zone['faceBottom']} | free left {zone['freeLeft']} right {zone['freeRight']} → {zone['side']}")
+        else: print(f"{i:2d} {zone['clip']} from={s['fromFrame']:5d} zoom {zone['zoom']:.2f} {zone['shot']:7s} face y {zone['faceTop']}–{zone['faceBottom']} | free top {zone['freeTop']} bottom {zone['freeBottom']}")
     json.dump(rows, open(a.out, "w"), indent=1); print("FACE_ZONES_DONE", a.out)
 
 if __name__ == "__main__":

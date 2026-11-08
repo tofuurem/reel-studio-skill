@@ -5,12 +5,12 @@ Usage: work/dfvenv/bin/python -I dualmic.py <project> [--cutlist work/cutlist.js
        work/dfvenv/bin/python -I dualmic.py <project> --test START DUR <camera file>   → work/voice/test/<id>_{L,R,mix,downmix}.wav
 Why (Halloween vlog, 2026-11-02 … 04): a downmix first mixes both mics' noise and the far mic's late copy of every voice
 (comb filtering, a hollow «из толчка» voice); a mic held at the mouth clips in the transmitter, and the flat tops crackle
-(«колонки хотят спалить»). So, per channel: adeclip (input halved so rebuilt peaks fit) → DeepFilterNet limited to
+(«колонки хотят спалить»). So, per channel: adeclip around clipped samples only (voicelib.declip_local) → DeepFilterNet limited to
 dualmicAtten dB (full strength sounded hollow) → a Dugan-style automix per 10 ms: each channel's gain is its share of the
 smoothed power ^ (dualmicHard / 2), so whoever speaks into their own mic wins. A dead channel (digital silence) is skipped;
 a mono file or two identical channels (one mic on both) go through the same chain once.
 --cutlist cleans only the source ranges the cut list uses (± --pad s), zeros elsewhere — a 9-minute take is not read whole.
-Output: work/voice/out/<clipId>_DeepFilterNet3.wav (48 kHz mono float, full clip length) — what voice_mix.py and
+Output: work/voice/out/<clipId>_DeepFilterNet3.wav (48 kHz mono float, full clip length) — what dialogue.py and
 make_proxies --voice-dir read. Re-runs skip finished clips unless the windows changed (work/voice/out/.dualmic.json).
 Prints DUALMIC_DONE.
 """
@@ -18,9 +18,9 @@ import argparse, json, os, subprocess, sys, tempfile
 import numpy as np, soundfile as sf
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from common import N, atomic_json, clip_id, load_json, src_dur
+import voicelib as V
 
 SR = 48000; HOP = 480   # 10 ms
-DECLIP = "adeclip,volume=0.5"
 
 
 def channels(src):
@@ -33,11 +33,13 @@ def duration(src):
 
 
 def extract(src, ch, dst, ss=None, t=None):
-    """One channel (or the mono track: ch None), declipped, 48 kHz."""
-    seek = ["-ss", f"{ss:.3f}", "-t", f"{t:.3f}"] if ss is not None else []
-    pan = f"pan=mono|c0=c{ch}," if ch is not None else ""
-    subprocess.run(["ffmpeg", "-hide_banner", "-loglevel", "error", "-nostdin", "-y", *seek, "-i", src, "-map", "0:a:0", "-vn",
-                    "-af", f"{pan}{DECLIP}", "-ar", str(SR), "-ac", "1", "-c:a", "pcm_s16le", dst], check=True)
+    """One channel (or the mono track: ch None), declipped only where it clipped, scaled to −1 dBFS peak (DeepFilterNet
+    writes 16-bit) → the scale to undo afterwards."""
+    x = V.read(src, ss, t, ch).astype(np.float32)
+    if int(np.sum(np.abs(x) >= 0.985)) >= N["declipMinSamples"]: x, _ = V.declip_local(x)
+    k = 10 ** (-1 / 20) / max(float(np.abs(x).max()) if len(x) else 0.0, 1e-6)
+    sf.write(dst, x * k, SR, subtype="FLOAT")
+    return k
 
 
 def same_channels(src, ss=None):
@@ -76,16 +78,16 @@ def clean(P, src, ranges, tmp):
     if not os.path.exists(df): sys.exit(f"DeepFilterNet missing: run setup_env.sh {P} first")
     two = channels(src) >= 2 and not same_channels(src, ranges[0][0] if ranges[0] else None)
     chans = ((0, "L"), (1, "R")) if two else ((None, "M"),)
-    ins = []
+    ins, scale = [], {}
     for i, rg in enumerate(ranges):
         for ch, name in chans:
             f = os.path.join(tmp, f"w{i:03d}_{name}.wav"); ins.append(f)
-            extract(src, ch, f) if rg is None else extract(src, ch, f, rg[0], rg[1] - rg[0])
+            scale[(i, name)] = extract(src, ch, f) if rg is None else extract(src, ch, f, rg[0], rg[1] - rg[0])
     subprocess.run([df, *ins, "-a", str(N["dualmicAtten"]), "-o", tmp], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     out = []
     for i, _ in enumerate(ranges):
-        got = [sf.read(os.path.join(tmp, f"w{i:03d}_{name}_DeepFilterNet3.wav"))[0] for _, name in chans]
-        out.append(2 * (automix(*got) if two else got[0]))   # ×2 gives back the declip headroom
+        got = [sf.read(os.path.join(tmp, f"w{i:03d}_{name}_DeepFilterNet3.wav"))[0] / scale[(i, name)] for _, name in chans]
+        out.append(automix(*got) if two else got[0])
     return out, two
 
 

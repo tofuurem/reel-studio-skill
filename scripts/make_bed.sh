@@ -1,5 +1,6 @@
 #!/bin/zsh
-# Procedural lo-fi music bed → reel/public/audio/lofi_bed.m4a (what the template's MusicBed references).
+# Procedural lo-fi music bed → reel/public/audio/lofi_bed.wav (what the template's MusicBed references; PCM — the render
+# encodes the sound once, at the end).
 # Usage: make_bed.sh <project-dir> [seconds] [warm|night|bright|dusk|spooky]      (or make_bed.sh <project-dir> <preset>)
 #        seconds default = work/cutlist.json totalFrames/30 + numbers.json bedTailSec (15 s: the end card and the fade)
 # Offer the user's own track first (assets/music): the procedural bed is recognisably the same in every video («такой же как
@@ -14,7 +15,7 @@ fi
 PY="$P/work/venv/bin/python"; [ -x "$PY" ] || PY=python3   # needs numpy
 mkdir -p "$P/reel/public/audio"
 "$PY" -I "$SK/lofi.py" "$P/work/lofi_$PRESET.wav" "$SEC" "$PRESET"
-ffmpeg -hide_banner -loglevel error -nostdin -y -i "$P/work/lofi_$PRESET.wav" -af "aecho=0.6:0.3:60:0.25" -c:a aac -b:a 160k "$P/reel/public/audio/lofi_bed.m4a"
+ffmpeg -hide_banner -loglevel error -nostdin -y -i "$P/work/lofi_$PRESET.wav" -af "aecho=0.6:0.3:60:0.25" -ar 48000 -c:a pcm_s16le "$P/reel/public/audio/lofi_bed.wav"
 # the bed's beat grid for gen_reel (cuts on a bar, pictures on beats): work/beats.json {"bpm", "preset", "frames", "bars"} — the bed starts at frame 0
 python3 -I - "$SK/lofi.py" "$PRESET" "$SEC" "$P/work/beats.json" <<'PY'
 import json, re, sys
@@ -23,4 +24,4 @@ m = re.search(rf"'{preset}':\s*dict\(bpm=(\d+)", src); bpm = int(m.group(1)) if 
 frames = [int(round(k * beat * 30)) for k in range(int(sec / beat) + 1) if k * beat < sec]
 json.dump({"bpm": bpm, "preset": preset, "frames": frames, "bars": frames[::4]}, open(out, "w"))
 PY
-echo BED_OK "$P/reel/public/audio/lofi_bed.m4a ($SEC s, $PRESET) + work/beats.json"
+echo BED_OK "$P/reel/public/audio/lofi_bed.wav ($SEC s, $PRESET) + work/beats.json"

@@ -16,7 +16,7 @@ type Props = {
   fadeIn?: number;
   fadeOut?: number;
   /** A title behind the person (reelgen.cutaway(..., behind={...}) makes the matte with person_matte.py). Local frames. */
-  behind?: { matte: string; title: string; kicker?: string; at?: number; until?: number; y?: number };
+  behind?: { matte: string; title: string; kicker?: string; at?: number; until?: number; y?: number; x?: number; scale?: number };
   children?: React.ReactNode;
 };
 
@@ -30,9 +30,9 @@ export const BRoll: React.FC<Props> = ({ src, trimBefore, zoomFrom = 1, zoomTo =
     <AbsoluteFill style={{ opacity: envelope(frame, durationInFrames, fadeIn, fadeOut) }}>
       <AbsoluteFill style={{ scale: String(interpolate(frame, [0, Math.max(1, durationInFrames)], [zoomFrom, zoomTo], { extrapolateRight: "clamp", easing: Easing.linear })) }}>
         <Video src={staticFile(footagePath(src))} trimBefore={trimBefore} muted objectFit="cover" style={{ width: "100%", height: "100%" }} />
-        {behind ? <BehindTitle title={behind.title} kicker={behind.kicker} at={behind.at ?? 4} until={behind.until ?? durationInFrames} y={behind.y} /> : null}
+        {behind ? <BehindTitle title={behind.title} kicker={behind.kicker} at={behind.at ?? 4} until={behind.until ?? durationInFrames} y={behind.y} x={behind.x} scale={behind.scale} /> : null}
         {behind ? <MatteLayer src={behind.matte} /> : null}
-        {behind?.kicker ? <BehindTitle part="front" title={behind.title} kicker={behind.kicker} at={behind.at ?? 4} until={behind.until ?? durationInFrames} y={behind.y} /> : null}
+        {behind?.kicker ? <BehindTitle part="front" title={behind.title} kicker={behind.kicker} at={behind.at ?? 4} until={behind.until ?? durationInFrames} y={behind.y} x={behind.x} scale={behind.scale} /> : null}
       </AbsoluteFill>
       {children}
     </AbsoluteFill>

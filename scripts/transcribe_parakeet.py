@@ -12,8 +12,6 @@ import sys
 import tempfile
 from pathlib import Path
 
-from parakeet_mlx import from_pretrained
-
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from clipid import check_unique, clip_id  # noqa: E402
 
@@ -24,6 +22,7 @@ OUT = Path("work/pk")
 def main(sources: list[str]) -> None:
     check_unique(sources)
     OUT.mkdir(parents=True, exist_ok=True)
+    from parakeet_mlx import from_pretrained   # here, so --help works without the venv
     model = from_pretrained(str(MODEL))
     for src in map(Path, sources):
         target = OUT / f"{clip_id(str(src))}.json"
@@ -43,4 +42,7 @@ def main(sources: list[str]) -> None:
 
 
 if __name__ == "__main__":
-    main(sys.argv[1:])
+    args = sys.argv[1:]
+    if not args or args[0] in ("-h", "--help"):   # it used to hand "--help" to ffmpeg as a file name
+        print(__doc__); sys.exit(0 if args else 2)
+    main(args)

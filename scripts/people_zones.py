@@ -48,7 +48,7 @@ def scan(src, a, b, fps, cache):
         subprocess.run(["ffmpeg", "-v", "error", "-nostdin", *HWACCEL, "-ss", f"{t0:.3f}", "-t", f"{b - t0 + 0.25:.3f}", "-i", src,
                         "-an", "-vf", f"fps={fps},scale=640:-2", "-q:v", "4", os.path.join(tmp, "%05d.jpg")], check=True)
         new = []
-        for i, name in enumerate(sorted(os.listdir(tmp))):
+        for i, name in enumerate(sorted(n for n in os.listdir(tmp) if n.endswith(".jpg") and not n.startswith("."))):   # ._*.jpg on exFAT
             people, faces = vision(os.path.join(tmp, name))
             new.append({"t": round(t0 + (i + 0.5) / fps, 3), "people": people, "faces": faces})
     keep = [f for f in frames if not (new and new[0]["t"] - 0.01 <= f["t"] <= new[-1]["t"] + 0.01)]

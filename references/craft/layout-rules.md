@@ -1,8 +1,12 @@
 # Layout rules for 1080x1920 reels (scale everything ×4/3 for 2K; the Reel2K comp does this)
 
-A **16:9 canvas** (`"canvas": "16:9"` in intake.json — long vlogs): 1920×1080 layout, 2560×1440 render; nothing is cropped
-(camera clips fill the frame), people_zones has nothing to do, the Instagram safe zones below do not apply — keep text
-inside a 5 % margin, captions bottom ≈ 960. Action.tsx and BehindTitle switch their positions by `H > W`.
+A **16:9 canvas** (`"canvas": "16:9"` in intake.json — long vlogs, wide reels): 1920×1080 layout, 2560×1440 render; nothing is
+cropped (camera clips fill the frame), people_zones has nothing to do, the Instagram safe zones below do not apply — keep text
+inside `N.wideMargin` (5 %), cards above `N.wideBandBottom` (captions sit at ≈ 880–960). Action.tsx and BehindTitle switch
+their positions by `H > W`. Faces: `face_zones.py` maps boxes onto 1920×1080, samples every 0.5 s (handheld shots wander),
+ignores faces under 60 px (a video call on a laptop screen) and writes `faceLeft / faceRight`, `freeLeft / freeRight` and `side`;
+in the generator `R.free_side(a, b)` → `("left" | "right" | None, x0, x1)` — put cards, chips and bubbles on that side.
+A corner HUD (timer, step, progress) sits top-left at `wideMargin`; check it against the faces of every segment it spans.
 
 ## Safe zones
 - Top 0–180: status bar / reel header. Chapter tags at y 200–280 (`N.tagY`); cards start below them at y 300 (`N.cardTop`).

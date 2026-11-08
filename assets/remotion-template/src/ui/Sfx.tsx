@@ -27,7 +27,7 @@ type Range = [number, number];
  * N.bedRamp-frame ramps between them (a jump is heard as a cut) and an N.bedFadeOut fade at the very end.
  */
 export const MusicBed: React.FC<{ src?: string; speechStart?: number; speechEnd: number; pauses?: Range[]; under?: number; open?: number; name?: string }> = ({
-  src = "audio/lofi_bed.m4a",
+  src = "audio/lofi_bed.wav",
   speechStart = 0,
   speechEnd,
   pauses = [],

@@ -27,7 +27,6 @@ export const N = {
   // Audio levels (Remotion volume; the render then sets the whole mix to the target with a static gain)
   targetLufs: -16, // final integrated loudness (LUFS)
   lufsTolerance: 0.5, // render fails if the final file is further off the target than this (LU)
-  sourceLufs: -24, // each speech source after match_loudness.py (LUFS over its used ranges)
   bedUnder: 0.18, // music bed under speech
   bedOpen: 0.3, // bed in the cold open, wordless pauses and the tail
   bedTailSec: 15, // bed length = cut list totalFrames / 30 + this (s)
@@ -62,6 +61,9 @@ export const N = {
   punchCenterY: 730, // punch zoom origin y
   coverCrop34Top: 240, // cover 3:4 grid crop, top (bottom 1680)
   coverCrop11Top: 420, // cover 1:1 crop, top (bottom 1500); faces and the word stay inside
+  wideMargin: 54, // 16:9 canvas: margin of titles, HUDs and cards (px on 1920×1080)
+  wideBandTop: 54, // 16:9 canvas: top of the card band
+  wideBandBottom: 860, // 16:9 canvas: bottom of the card band
   // Proxies
   proxyCrf: 18, // x264 CRF of the proxies
   proxyPadSec: 2, // --trim-to-cutlist pad on each side of the used range (s)
@@ -81,7 +83,7 @@ export const N = {
   snapFwd: 4.5, // a range that ends inside a sentence grows forward to its end, at most this many seconds
   snapJoin: 0.8, // a pause at least this long counts as a sentence edge even without .?!… (s)
   splitWindowSec: 25, // ranges of one take further apart than this get their own alias proxy (s)
-  // Voice bus (two mics, levels, taming)
+  // Voice chain (voice_clean.py restores each source → dialogue.py builds and processes one dialogue stem → render.sh masters)
   dualmicAtten: 12, // DeepFilterNet noise reduction limit per lav channel (dB)
   dualmicHard: 3.0, // automix exponent: channel gain ∝ power^(this/2) share
   voiceTargetDb: -22.0, // active speech level of every clip before the render's static gain (dBFS)
@@ -91,13 +93,43 @@ export const N = {
   voiceSegMax: 4.0, // most a single segment is moved (dB)
   ambDb: -30.0, // camera sound under a picture beat ("amb"), active level (dBFS)
   rawDb: -22.0, // camera sound instead of the voice ("raw") (dBFS)
-  tameOverDb: 6.0, // compressor threshold above voiceTargetDb (dB)
-  tameRatio: 3.0, // compressor ratio above the threshold
-  tameCeilDb: -12.0, // look-ahead limiter ceiling before the render gain (dBFS)
+  declipMinSamples: 20, // samples at |x| ≥ 0.985 before a source counts as clipped and gets adeclip
+  noiseTargetDb: 48, // how far under the speech the residual noise should sit after cleanup (dB); DeepFilterNet's limit = this − the source SNR
+  dfnMinAtten: 6, // smallest DeepFilterNet limit used (dB); a source with SNR ≥ noiseTargetDb skips DeepFilterNet
+  dfnMaxAtten: 18, // largest DeepFilterNet limit (dB)
+  cutXfadeMs: 10, // equal-power crossfade on every jump cut of the dialogue (ms, centred on the cut, from source handles)
+  joinXfadeMs: 40, // linear crossfade where two segments continue the same take (a gain change, not a cut)
+  hpfHz: 80, // high-pass of the voice (12 dB/oct)
+  phaseRotHz: 300, // centre of the phase rotator (4 all-pass sections, Q 0.7) after the high-pass
+  eqAmount: 0.7, // share of the measured deviation from the target speech spectrum that the tonal EQ corrects
+  eqMaxCut: 4.0, // deepest mud (315 Hz) / box (900 Hz) cut (dB)
+  eqMaxBoost: 4.0, // largest presence boost at 3.5 kHz (dB)
+  eqMaxAir: 3.0, // largest air boost (9 kHz shelf, dB)
+  compOverDb: 4.0, // the one compressor's threshold over the leveled speech (dB over voiceTargetDb)
+  compRatio: 2.0, // its ratio
+  compKneeDb: 6.0, // its soft knee (dB)
+  compAttackMs: 15.0, // its attack (ms)
+  compReleaseMs: 200.0, // its release (ms)
+  compWindowMs: 30, // its RMS detector window (ms)
+  deessOverDb: -6.0, // de-esser acts where the 6.5 kHz band is louder than the speech level + this (dB) and dominates the frame
+  deessMaxDb: 6.0, // deepest de-esser cut (dB)
+  stemLufs: -24.0, // integrated loudness of the finished dialogue stem (reel/public/audio/dialogue.wav)
+  stemPeakDb: -10.0, // look-ahead peak ceiling of the stem (dBFS)
+  truePeakDb: -1.5, // master true-peak ceiling (dBTP; 4× oversampled limiter in render.sh)
+  aacBitrate: "320k", // final AAC bitrate (the only lossy encode of the sound; Remotion renders PCM)
+  lraMax: 9.0, // audio_qa warns above this loudness range of the final mix (LU)
+  lraMin: 3.0, // audio_qa warns below this (LU): over-compressed
   // Picture: night lift, action pieces
   nightStrong: 20, // mean luma (0–255) below which a clip gets the strong shadow lift
   nightMedium: 40, // … the medium lift
   nightMild: 50, // … the mild lift; brighter clips are untouched
   actionSlowmo: 0.9, // a piece slower than this is retimed with motion-compensated interpolation (minterpolate)
   actionPhraseBars: 4, // bars per musical phrase on the reel grid (whips and big moments go on phrase starts)
+  // Motion timing
+  entranceMaxFrames: 24, // longest entrance of one element (frames); a longer build is a stagger of several elements
+  staggerMaxFrames: 15, // total stagger of one group of items (first start → last start)
+  exitShare: 0.75, // an exit lasts this share of the matching entrance
+  payoffPauseMin: 9, // shortest still beat between an action and its result (frames)
+  payoffPauseMax: 22, // longest still beat before a payoff (frames)
+  transitionKindsMax: 3, // kinds of scene transition in one reel (dissolve, hand-off, whip …), repeated
 } as const;

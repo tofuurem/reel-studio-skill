@@ -32,7 +32,7 @@ Prints ACTION_OK.
 """
 import glob, hashlib, json, os, subprocess, sys, tempfile
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from common import N, atomic_json, canvas_size, clip_id, crop_expr, is_camera, load_json, load_lut_map, lut_for, probe, title_y
+from common import N, atomic_json, canvas_size, clip_id, crop_expr, load_json, load_lut_map, lut_for, probe, title_place
 
 SK = os.path.dirname(os.path.abspath(__file__))
 # after the D-Log LUT the night footage is flat and grey; a camera without D-Log needs less
@@ -105,9 +105,9 @@ class Project:
         else:
             out.append(f"scale={self.W}:{self.H}:force_original_aspect_ratio=increase:flags=lanczos,crop={self.W}:{self.H}")
         out.append("setsar=1")
-        lut = lut_for(f, self.lut, self.lut_map, info)[0] if is_camera(f) else None
-        if lut: out.append(f"lut3d=file='{lut}':interp=tetrahedral")
-        out.append(self.grade[0] if lut else self.grade[1])
+        lut = lut_for(f, self.lut, self.lut_map, info)[0]   # D-Log camera clips and HDR phone clips; None for Rec.709
+        if lut: out.append(f"lut3d=file='{lut}':interp=tetrahedral,setparams=color_primaries=bt709:color_trc=bt709:colorspace=bt709")   # Rec.709 from here on
+        out.append(self.grade[0] if lut and not info.get("hdr") else self.grade[1])   # D-Log needs the stronger grade; HDR comes out Apple-graded
         if speed != 1: out.append(f"setpts=PTS/{speed}")
         out.append(f"minterpolate=fps={self.fps}:mi_mode=mci:mc_mode=aobmc:me_mode=bidir" if speed < N["actionSlowmo"] else f"fps={self.fps}")
         return ",".join(out), lut
@@ -130,7 +130,7 @@ class Project:
     def matte(self, piece_file, mode):
         out = piece_file.replace(".mp4", ".matte.webm")
         subprocess.run([os.path.join(self.P, "work/venv/bin/python"), "-I", os.path.join(SK, "person_matte.py"), "reel/public/" + piece_file, "reel/public/" + out,
-                        "--mode", mode or "person", "--fps", str(self.fps)], check=True, stdout=subprocess.DEVNULL)
+                        "--mode", mode or "auto", "--fps", str(self.fps)], check=True, stdout=subprocess.DEVNULL)
         return out
 
     # ------------------------------------------------------------ build
@@ -140,6 +140,9 @@ class Project:
         known = {p["file"]: p for s in old["shots"] for p in s["pieces"]}; known_v = {s.get("voice"): s.get("vspec") for s in old["shots"]}
         known_m = {p["file"]: p.get("mspec") for s in old["shots"] for p in s["pieces"]}
         res, pos, cum = [], 0, 0.0
+        whips = [(i, s["fx"]["whip"]) for i, s in enumerate(shots, 1) if s["fx"].get("whip")]
+        for (i, d), (j, e) in zip(whips, whips[1:]):   # the vector law (motion-design.md «Seams»): one current, no ping-pong
+            if d != e: print(f"WARNING: whip {d} on shot {i}, then {e} on shot {j} — keep one direction unless something on screen causes the flip")
         for i, s in enumerate(shots, 1):
             f = self.src(s["clip"])
             if s["beats"] is not None:
@@ -157,7 +160,7 @@ class Project:
                 name = f"shots/s{i:02d}{'abcdefghij'[k] if len(s['pieces']) > 1 else ''}.mp4"
                 b = p["a"] + p["frames"] / self.fps * p["speed"]
                 keys = self.auto_keys(f, p["a"], b) if x == "auto" and self.info(f)["w"] / self.info(f)["h"] > self.W / self.H + 0.01 else None
-                spec = hashlib.md5(json.dumps([f, p, x, keys, self.W, self.H, self.grade, self.lut, self.lut_map, N["actionSlowmo"]], default=str).encode()).hexdigest()[:10]
+                spec = hashlib.md5(json.dumps([f, p, x, keys, self.W, self.H, self.grade, self.lut, self.lut_map, N["actionSlowmo"]] + (["hdr", lut_for(f, self.lut, self.lut_map, self.info(f))[0]] if self.info(f).get("hdr") else []), default=str).encode()).hexdigest()[:10]
                 prev = known.get(name)
                 if prev and prev["spec"] == spec and os.path.exists("reel/public/" + name) and not (only and i in only):
                     entry = dict(prev)
@@ -182,6 +185,7 @@ class Project:
         keep = {p[k] for s in res for p in s["pieces"] for k in ("file", "matte") if p.get(k)} | {s["voice"] for s in res if s["voice"]}
         for d in ("shots", "voice"):   # pieces of shots that no longer exist (a shorter list, a re-split) would only confuse
             for fn in os.listdir(f"reel/public/{d}"):
+                if fn.startswith("."): continue   # AppleDouble sidecars / .DS_Store
                 rel = f"{d}/{fn}"
                 if rel not in keep and not fn.endswith(".mask.json") and (fn.endswith((".mp4", ".webm", ".wav"))): os.remove(f"reel/public/{rel}")
                 elif fn.endswith(".mask.json") and rel.replace(".mask.json", ".webm") not in keep: os.remove(f"reel/public/{rel}")
@@ -226,7 +230,9 @@ class Project:
             if s["behind"]:
                 d["behind"] = {k: v for k, v in s["behind"].items() if k != "mode"}
                 mt_ = next((p["matte"] for p in s["pieces"] if p.get("matte")), None)
-                if "y" not in d["behind"] and mt_: d["behind"]["y"] = title_y("reel/public/" + mt_.replace(".webm", ".mask.json"))
+                if "y" not in d["behind"] and mt_:   # x, y, scale from the matte's alpha (common.title_place)
+                    d["behind"].update(title_place("reel/public/" + mt_.replace(".webm", ".mask.json"), d["behind"].get("title"),
+                                                   canvas_size(None, self.P), kicker=bool(d["behind"].get("kicker"))) or {})
             d.update({k: (list(map(list, v)) if k == "sfx" else v) for k, v in s["fx"].items()})
             shots.append(d)
         g = self.grid or {}

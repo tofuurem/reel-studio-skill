@@ -35,7 +35,7 @@ def _val(v):
     if isinstance(v, js): return "{" + v + "}"
     if isinstance(v, bool): return "{true}" if v else "{false}"
     if isinstance(v, (int, float)): return "{" + (str(round(v, 4)) if isinstance(v, float) else str(v)) + "}"
-    if isinstance(v, str): return json.dumps(v, ensure_ascii=False) if '"' not in v and "\\" not in v else "{" + json.dumps(v, ensure_ascii=False) + "}"
+    if isinstance(v, str): return json.dumps(v, ensure_ascii=False) if '"' not in v and "\\" not in v and "\n" not in v else "{" + json.dumps(v, ensure_ascii=False) + "}"   # \n is literal in a JSX attribute: multi-line code goes in braces
     return "{" + _jsonish(v) + "}"
 
 
@@ -165,6 +165,17 @@ class Project:
         zs = [z["freeBottom"] for z in self._zones(a, b) if z.get("freeBottom")]
         return (max(z[0] for z in zs), min(z[1] for z in zs)) if zs else default
 
+    def free_side(self, a, b, min_w=420):
+        """16:9 canvas: the side of the frame free of the face over frames [a, b) → ("left" | "right", x0, x1), or (None, …)
+        when neither strip is min_w wide; no face rows → the left half. face_zones.py writes freeLeft / freeRight on 16:9."""
+        zs = [z for z in self._zones(a, b) if z.get("freeLeft")]
+        if not zs: return ("left", N["wideMargin"], 960)
+        out = []
+        for k in ("freeLeft", "freeRight"):
+            x0 = max(z[k][0] for z in zs); x1 = min(z[k][1] for z in zs); out.append((x1 - x0, "left" if k == "freeLeft" else "right", x0, x1))
+        w, side, x0, x1 = max(out)
+        return (side if w >= min_w else None, x0, x1)
+
     def beats(self, every=1, start=0, end=None):
         """Beat frames of the music bed (work/beats.json from silent_timeline.py / make_bed.sh): {"frames": [...]} or {"bpm", "offsetFrames"}."""
         end = self.END if end is None else end
@@ -182,20 +193,21 @@ class Project:
     # ---- layers
     def cutaway(self, cid, src_sec, a, b, name, zoom=(1, 1.08), fade=(None, None), cover=True, behind=None):
         """Full-frame b-roll from footage/<cid>.mp4 showing source second `src_sec` at reel frame `a`; widened by cover().
-        behind={"title": "ХЭЛЛОУИН", "kicker": "31.10", "at": 6, "until": 80, "mode": "person"|"subject"} puts the title
+        behind={"title": "ХЭЛЛОУИН", "kicker": "31.10", "at": 6, "until": 80, "mode": "auto"|"birefnet"|"person"|"subject"} puts the title
         BEHIND the person: person_matte.py cuts them out of the 2K proxy for exactly these frames (cached in public/mattes)."""
         na, nb = self.cover(a, b, name) if cover else (a, b)
         tb = self.trim(cid, src_sec) - (a - na)
         if tb < 0: raise SystemExit(f"cutaway «{name}»: the proxy starts too late for the widened range (trimBefore {tb}) — re-run make_proxies with a wider window")
         bh = None
         if behind:
-            bh = {k: v for k, v in behind.items() if k != "mode"}; bh["matte"] = self.matte(cid, tb, nb - na, behind.get("mode", "person"))
-            if "y" not in bh:
-                from common import title_y
-                bh["y"] = title_y(os.path.join(self.root, "reel/public", bh["matte"].replace(".webm", ".mask.json")))
+            bh = {k: v for k, v in behind.items() if k != "mode"}; bh["matte"] = self.matte(cid, tb, nb - na, behind.get("mode", "auto"))
+            if "y" not in bh:   # x, y, scale from the matte's alpha (common.title_place); pass "y" to place it by hand
+                from common import canvas_size, title_place
+                bh.update(title_place(os.path.join(self.root, "reel/public", bh["matte"].replace(".webm", ".mask.json")), bh.get("title"),
+                                      canvas_size(None, self.root), kicker=bool(bh.get("kicker"))) or {})
         return seq(na, nb, tag("BRoll", src=f"footage/{cid}.mp4", trimBefore=tb, zoomFrom=zoom[0], zoomTo=zoom[1], fadeIn=fade[0], fadeOut=fade[1], behind=bh), name, premount=True)
 
-    def matte(self, cid, trim, frames, mode="person"):
+    def matte(self, cid, trim, frames, mode="auto"):
         """reel/public/mattes/<cid>_<trim>_<frames>_<mode>.webm: the people of footage2k/<cid>.mp4 (or footage/) from proxy frame
         `trim`, `frames` long, transparent elsewhere — made once, reused on re-runs while the proxy is older than it."""
         rel = f"mattes/{cid}_{trim}_{frames}_{mode}.webm"; out = os.path.join(self.root, "reel/public", rel)
@@ -240,9 +252,11 @@ class Project:
         """A tick every N.sfxTickEvery frames while a number counts from a to b."""
         return self.sfx_many(list(range(int(a), int(b), N["sfxTickEvery"])), kind, "sfx ticks")
 
-    def music_bed(self, src="audio/lofi_bed.m4a", speech_start=None, speech_end=None, pauses=(), under=None, open_=None):
+    def music_bed(self, src=None, speech_start=None, speech_end=None, pauses=(), under=None, open_=None):
         """The bed over the whole reel: bedOpen before the first word, in `pauses` and after speech_end, bedUnder under
         speech (`under=0.09` when the user says the music is too loud), ramps and an end fade from N."""
+        if src is None:   # make_bed.sh writes PCM now; older projects have the .m4a
+            src = "audio/lofi_bed.wav" if os.path.exists(os.path.join(self.root, "reel/public/audio/lofi_bed.wav")) else "audio/lofi_bed.m4a"
         if self.silent: speech_start, speech_end = 0, 0  # no speech: the bed carries the reel at bedOpen
         first = self.words[0][0] if self.words else 0
         return tag("MusicBed", src=src, speechStart=first if speech_start is None else speech_start, speechEnd=self.END if speech_end is None else speech_end,
@@ -250,9 +264,12 @@ class Project:
 
     def capcut_voiceovers(self):
         """Sequences for the voiceovers the user recorded inside a CapCut draft, where the draft put them (levelled
-        reel/public/audio/<name>.m4a from match_loudness.py)."""
+        reel/public/audio/<name>.m4a) — only for projects without a dialogue stem: dialogue.py places them in it."""
         out = []
         vo = set(self.cl.get("voiceovers", []))
+        dj = os.path.join(self.root, "work/voice/dialogue.json")
+        if os.path.exists(dj) and set(json.load(open(dj)).get("voiceovers", [])) >= vo:
+            return out   # dialogue.py placed them in the dialogue stem (<Dialogue /> plays it)
         for t in self.cl.get("tracks", []):
             if t.get("type") != "audio": continue
             for sg in t.get("segments", []):
@@ -271,6 +288,8 @@ class Project:
         tail = N["endTail"] if tail is None else tail
         reel = speech_end + tail  # the tail holds the end card (or your own closing layer with end_card=False)
         layers = [stage or tag("Stage", tag("Timeline"), windows=js("[]"))]
+        if os.path.exists(os.path.join(self.root, "reel/src/Dialogue.tsx")): layers.append(tag("Dialogue"))   # the voice stem (dialogue.py); renders nothing while DIALOGUE is null
+        elif os.path.exists(os.path.join(self.root, "reel/public/audio/dialogue.wav")): print("WARNING: reel/public/audio/dialogue.wav exists but reel/src/Dialogue.tsx does not — copy Dialogue.tsx, dialogueSrc.ts and Clip.tsx from the skill's template")
         layers += [x for x in body if x]
         if end_card: layers.append(seq(speech_end, reel, tag("EndCard"), "end"))
         if captions is None: captions = not self.silent
@@ -299,7 +318,7 @@ def _exports(src_dir, skip):
     for root, _, files in os.walk(src_dir):
         for f in files:
             full = os.path.join(root, f)
-            if not f.endswith((".ts", ".tsx")) or os.path.abspath(full) == os.path.abspath(skip): continue
+            if f.startswith(".") or not f.endswith((".ts", ".tsx")) or os.path.abspath(full) == os.path.abspath(skip): continue   # ._X.tsx: AppleDouble on exFAT
             mod = "./" + os.path.relpath(full, src_dir).rsplit(".", 1)[0].replace(os.sep, "/")
             for name in re.findall(r"^export (?:const|function) ([A-Za-z_]\w*)", open(full, encoding="utf-8").read(), re.M):
                 found.setdefault(name, []).append(mod)

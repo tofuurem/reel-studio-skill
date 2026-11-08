@@ -21,7 +21,9 @@ straight from the camera files by `scripts/actiongen.py`, the template's `Action
    candidate moments with clip + seconds, what happens (action, a face, a punchline), how strong. Look at frames
    (`folder_sheet.sh`, `contact_sheet.sh`) — an «action» in a transcript is often someone sitting down. For a specific
    moment the user names («где крутили колесо») search the frames, and if it is not there, say so and offer the nearest one.
-2. **The track.** The user picks it (a current one from Instagram's library is fine — they add it there). With the file:
+2. **The track.** The user picks it (a current one from Instagram's library is fine — they add it there). A link instead of
+   a file: `python3 -I $S/fetch.py <project> <url> --as music` → `assets/music/<name>.m4a` (only for the beat grid and the
+   preview; the published reel still has no music). With the file:
    `work/venv/bin/python -I $S/track_beats.py <project> <track.mp3>` → tempo, bar energy map, drop candidates, suggested
    windows. Offer 2–3 windows by ear-worthy reasons (the drop at 5–8 s, the end on a phrase end), the user picks; then
    `track_beats.py <project> <track.mp3> --start S --len 45` → `work/track_beats.json` (grid) + `reel/public/audio/track_cut.m4a`.

@@ -47,7 +47,8 @@ def load_lut_map(path):
     return json.loads(path) if path.lstrip().startswith("{") else json.load(open(path))
 
 def lut_for(path, lut=None, lut_map=None, info=None):
-    """(cube path or None, reason). Order: --lut-map glob → non-camera files get none → explicit --lut / draft LUT →
+    """(cube path or None, reason). Order: --lut-map glob → an HDR source (HLG / PQ, any file: iPhone, Android HDR10, a camera
+    in HLG mode) gets the HDR → Rec.709 LUT (hdr_lut.py) → non-camera files get none → explicit --lut / draft LUT →
     none: Rec.709 is assumed — log footage (D-Log, S-Log, V-Log …) needs --lut or --lut-map (ask the user when the inventory
     shows flat grey footage)."""
     b = nfc(os.path.basename(path))
@@ -55,10 +56,21 @@ def lut_for(path, lut=None, lut_map=None, info=None):
         if fnmatch.fnmatch(b, pat) or fnmatch.fnmatch(nfc(path), pat) or fnmatch.fnmatch(nfc(os.path.basename(os.path.realpath(path))), pat):   # alias symlinks match as their source
             if str(cube).lower() in ("none", "", "null"): return None, f"lut-map {pat}: none"
             return os.path.expanduser(cube), f"lut-map {pat}"
+    info = info if info and "hdr" in info else probe(path)
+    if info.get("hdr"): return hdr_lut(info["hdr"]), f"HDR {info['hdr'].upper()} ({info.get('transfer')}) → Rec.709"
     if not is_camera(path): return None, "not a camera clip (Rec.709)"
     if lut: return os.path.expanduser(lut), "--lut / draft"
-    info = info or probe(path)
     return None, "no LUT (Rec.709 assumed" + (f", camera tag '{info.get('camera')}'" if info.get("camera") else "") + ")"
+
+HDR_TRANSFERS = {"arib-std-b67": "hlg", "smpte2084": "pq"}
+
+def hdr_lut(kind):
+    """The HDR → Rec.709 cube in LUT_DIR, generated on first use (hdr_lut.py, numpy; ≈ 3 s)."""
+    import hdr_lut as H
+    p = os.path.join(LUT_DIR, H.NAMES[kind])
+    if not os.path.exists(p):
+        os.makedirs(LUT_DIR, exist_ok=True); H.write_cube(p, kind); print("generated", p)
+    return p
 
 def _fps(r):
     try:
@@ -66,8 +78,9 @@ def _fps(r):
     except ValueError: return 0.0
 
 def probe(path):
-    """{dur, w, h (display, rotation applied), rot, fps (avg), r_fps, vfr, has_video, has_audio, codec, camera, nb_frames}"""
-    r = subprocess.run(["ffprobe", "-v", "error", "-show_entries", "format=duration:format_tags:stream=index,codec_type,codec_name,width,height,r_frame_rate,avg_frame_rate,nb_frames:stream_tags:stream_side_data",
+    """{dur, w, h (display, rotation applied), rot, fps (avg), r_fps, vfr, has_video, has_audio, codec, camera, nb_frames,
+    transfer, primaries, pix_fmt, hdr ("hlg" | "pq" | None)}"""
+    r = subprocess.run(["ffprobe", "-v", "error", "-show_entries", "format=duration:format_tags:stream=index,codec_type,codec_name,width,height,r_frame_rate,avg_frame_rate,nb_frames,pix_fmt,color_transfer,color_primaries,color_space:stream_tags:stream_side_data",
                         "-of", "json", path], capture_output=True, text=True)
     try: j = json.loads(r.stdout or "{}")
     except json.JSONDecodeError: j = {}
@@ -90,7 +103,9 @@ def probe(path):
     except ValueError: dur = 0.0
     return {"dur": dur, "w": w, "h": h, "rot": rot, "fps": round(avg, 3), "r_fps": round(rf, 3),
             "vfr": bool(avg and rf and abs(rf - avg) / rf > 0.02), "has_video": bool(v), "has_audio": any(s.get("codec_type") == "audio" for s in st),
-            "codec": v.get("codec_name"), "camera": cam, "nb_frames": int(v["nb_frames"]) if str(v.get("nb_frames", "")).isdigit() else None}
+            "codec": v.get("codec_name"), "camera": cam, "nb_frames": int(v["nb_frames"]) if str(v.get("nb_frames", "")).isdigit() else None,
+            "transfer": v.get("color_transfer"), "primaries": v.get("color_primaries"), "pix_fmt": v.get("pix_fmt"),
+            "hdr": HDR_TRANSFERS.get(v.get("color_transfer") or "")}
 
 def count_frames(path):
     """Video packets in the file (fast; = frames for the h264 the renders and proxies use). 0 for a missing/broken file."""
@@ -313,9 +328,84 @@ def canvas_size(spec=None, project=None):
     return CANVASES["9:16"]
 
 
-def title_y(mask_json):
-    """Vertical centre (0–1) for a title behind the person: a little below the top of the people's box (median over the
-    frames of person_matte.py's .mask.json), so the head covers the lower part of the letters. None if nobody was found."""
-    m = load_json(mask_json, {}) or {}
-    tops = sorted(f["bbox"][1] for f in m.get("frames", []) if f.get("bbox"))
-    return None if not tops else round(max(0.14, min(0.62, tops[len(tops) // 2] + 0.05)), 3)
+def title_box(title, canvas=(1080, 1920)):
+    """(height, width) of BehindTitle's word as fractions of the canvas: the same size rule as scenes/BehindTitle.tsx
+    (≈ 0.8 em per capital, at most 90 % of the width, 190 px portrait / 230 px landscape); caps ≈ 0.72 em tall."""
+    w, h = canvas; size = min(190 if h > w else 230, w * 0.9 / (0.8 * max(1, len(title))))
+    return 0.72 * size / h, min(0.9, 0.8 * size * len(title) / w)
+
+
+def title_place(mask_json, title=None, canvas=None, zoom=None, kicker=False):
+    """Where BehindTitle's word goes: {"x", "y", "scale"} (x, y = the word's centre 0–1 of the canvas; scale × the fitted font
+    size), or None if nobody was found in the matte.
+    mask_json: one person_matte.py .mask.json, or a list of (mask_json, zoom) pairs when one title spans several shots (a hook
+    over three jump cuts): one place that works for all of them.
+    With the mattes' .alpha.npz and the title text, every candidate (height × horizontal shift × size 1 / 0.85 / 0.7) is scored
+    on the alpha averaged over each shot: the person hides part of the word (≥ 2 %, ideally ≈ 10 %), the tops of the letters
+    stay visible, the top of the head (not a shoulder edge) is what crosses the word, as few real letters as possible are
+    hidden (the head over the hyphen or the space of «REEL-STUDIO», not over «EL»; the first and last letters never — a
+    shoulder edge over the «R» read as «EEL-STUDIO»), and the word does not cross soft or moving mask edges (hair strands,
+    hands — the time-averaged alpha is mid-grey there). Bigger and centred wins a tie.
+    The old rule «bbox top + 5 %» put a 16:9 title across the ears of a seated speaker: whole letters vanished and the
+    headphones' missing mask showed as a haze over the word (reel_studio_skill hook, 2026-11-06).
+    zoom=(scale, cx, cy): the footage is shown scaled around (cx, cy) (0–1; a punch-in) — the word is placed on the frame the
+    viewer sees. kicker=True keeps room above the word for the kicker line (it must not leave the top safe zone).
+    Without the npz (older mattes) or the title: x 0.5, y a little below the top of the people's box, scale 1, as before."""
+    import numpy as np
+    pairs = [(mask_json, zoom)] if isinstance(mask_json, str) else list(mask_json)
+    segs, fallback = [], None
+    for mj, zm in pairs:
+        m = load_json(mj, {}) or {}
+        tops = sorted(f["bbox"][1] for f in m.get("frames", []) if f.get("bbox"))
+        if not tops: continue
+        zs, zx, zy = zm or (1.0, 0.5, 0.5)
+        if fallback is None:
+            fallback = {"x": 0.5, "y": round(zy + (max(0.14, min(0.62, tops[len(tops) // 2] + 0.05)) - zy) * zs, 3), "scale": 1.0}
+        npz = mj[:-len(".mask.json")] + ".alpha.npz" if mj.endswith(".mask.json") else None
+        if not npz or not os.path.exists(npz): continue
+        Am = (np.load(npz)["alpha"].astype(np.float32) / 255).mean(0); h, w = Am.shape
+        soft = ((Am > 0.15) & (Am < 0.85)).astype(np.float32)
+        on = Am > 0.5
+        crown = int(np.argmax(on.any(1))) if on.any() else h                           # first row of the silhouette = top of the head
+        segs.append(dict(h=h, w=w, z=(zs, zx, zy), crown=crown, cum=np.vstack([np.zeros((1, w), np.float32), np.cumsum(Am, 0)]),
+                         cs=np.vstack([np.zeros((1, w), np.float32), np.cumsum(soft, 0)]), size=(m.get("width", 1080), m.get("height", 1920))))
+    if fallback is None: return None
+    if not title or not segs or len(segs) < len(pairs): return fallback
+    weight = np.array([0.0 if ch in " -–—·.,:!?" else 1.0 for ch in title])
+    weight[0] = weight[-1] = 4.0                                                          # «EEL-STUDIO»: the first and last letters always read
+    bh0, bw0 = title_box(title, canvas or segs[0]["size"])
+
+    def seg_score(g, sc, x, y, bh, bw):
+        h, w = g["h"], g["w"]; zs, zx, zy = g["z"]; to_src = lambda v, c: c + (v - c) / zs   # canvas 0–1 → proxy 0–1
+        c0, c1 = max(0, round(to_src(x - bw / 2, zx) * w)), min(w, round(to_src(x + bw / 2, zx) * w))
+        r0, r1 = max(0, round(to_src(y - bh / 2, zy) * h)), min(h, round(to_src(y + bh / 2, zy) * h))
+        if c1 - c0 < len(title) or r1 - r0 < 3: return None
+        cum, cs = g["cum"], g["cs"]
+        col = (cum[r1, c0:c1] - cum[r0, c0:c1]) / (r1 - r0)                          # share of each column hidden
+        occ = float(col.mean())
+        if occ < 0.02: return None                                                   # nobody behind the word: no effect
+        rt = r0 + max(1, (r1 - r0) * 2 // 5)
+        top = float((cum[rt, c0:c1] - cum[r0, c0:c1]).mean() / (rt - r0))           # upper 40 % of the letters
+        edges = np.linspace(0, c1 - c0, len(title) + 1).round().astype(int); covered = col > 0.5
+        lost = sum(weight[i] for i in range(len(title)) if covered[edges[i]:edges[i + 1]].mean() > 0.4)
+        fringe = float((cs[r1, c0:c1] - cs[r0, c0:c1]).sum() / ((r1 - r0) * (c1 - c0)) / max(occ, 0.01))
+        head = r0 - 0.15 * (r1 - r0) <= g["crown"] <= r1                             # the top of the head is what hides the word
+        return abs(occ - 0.10) * 2 + max(0.0, top - 0.03) * 4 + lost * 0.25 + fringe * 0.5 + (0 if head else 0.6)
+
+    best = None
+    for sc in (1.0, 0.85, 0.7):
+        bh, bw = bh0 * sc, bw0 * sc
+        for x in np.arange(max(0.25, bw / 2 + 0.04), min(0.75, 1 - bw / 2 - 0.04) + 1e-6, 0.01):
+            for y in np.arange(bh / 2 + (0.11 if kicker else 0.06), 0.78, 0.005):
+                parts = [seg_score(g, sc, x, y, bh, bw) for g in segs]
+                if any(p is None for p in parts): continue
+                score = sum(parts) / len(parts) + (1 - sc) * 0.6 + abs(x - 0.5) * 0.3
+                if best is None or score < best[0]: best = (score, float(x), float(y), sc)
+    if best is None: return fallback
+    return {"x": round(best[1], 3), "y": round(best[2], 3), "scale": best[3]}
+
+
+def title_y(mask_json, title=None, canvas=None, zoom=None, kicker=False):
+    """The y of title_place() (callers that only move the word up and down)."""
+    p = title_place(mask_json, title, canvas, zoom, kicker)
+    return None if p is None else p["y"]

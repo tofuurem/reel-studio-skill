@@ -12,7 +12,7 @@ times are already on the final timeline:
 - muted segments (volume 0: CapCut slivers, plan "mute": true, the silent carrier) are silence — no captions, bleeps or
   fw() anchors come from them;
 - CapCut voiceovers (cutlist "tracks", audio, in "voiceovers") are mixed in at their timeline position — from the levelled
-  reel/public/audio/<name>.m4a when match_loudness.py made it, else the original file — so captions and anchors cover them;
+  reel/public/audio/<name>.m4a when an older project has it, else the original file — so captions and anchors cover them;
 - a silent cut list (silent_timeline.py, images-only reel) writes an empty transcript and stops.
 Writes work/audio/timeline.wav + work/audio/timeline.json. --audio-only stops after the wav (needs no whisper).
 """

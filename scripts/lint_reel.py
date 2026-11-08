@@ -53,7 +53,7 @@ errors, warns = [], []
 for dp, dn, fn in os.walk(root):
     dn[:] = [d for d in dn if d not in ("node_modules", ".git")]
     for f in sorted(fn):
-        if not f.endswith((".ts", ".tsx")): continue
+        if f.startswith(".") or not f.endswith((".ts", ".tsx")): continue   # ._X.tsx: AppleDouble sidecars on external volumes
         p = os.path.join(dp, f); rel = os.path.relpath(p, root); blk = False
         for n, raw in enumerate(open(p, encoding="utf-8"), 1):
             if "lint-ok" in raw: continue

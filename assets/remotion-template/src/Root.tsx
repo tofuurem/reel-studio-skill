@@ -2,6 +2,7 @@ import React from "react";
 import { AbsoluteFill, Composition, Folder } from "remotion";
 import { Reel, REEL_FRAMES } from "./Reel";
 import { Action, ACTION_FRAMES } from "./Action";
+import { BlocksDemo, BLOCKS_DEMO_FRAMES } from "./blocks/BlocksDemo";
 import { Timeline, TOTAL_FRAMES } from "./Timeline";
 import { FPS, H, W } from "./theme";
 
@@ -34,6 +35,7 @@ export const RemotionRoot: React.FC = () => (
       <Composition id="Timeline" component={Timeline} durationInFrames={TOTAL_FRAMES} {...base} />
       {/* register each scene here too so it gets its own Studio timeline */}
     </Folder>
+    <Composition id="BlocksDemo" component={BlocksDemo} durationInFrames={BLOCKS_DEMO_FRAMES} {...base} />
     {/* Covers (stills, references/craft/covers.md): copy assets/examples/Covers.example.tsx to src/Covers.tsx, then
         import { Cover1 } from "./Covers";   import { Still } from "remotion";
         <Folder name="Covers">

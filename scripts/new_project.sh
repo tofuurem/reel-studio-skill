@@ -8,7 +8,7 @@
 #             <path>/epN/{work,out} with links into the pool:  epN/assets → ../assets,
 #             epN/work/{voice,new,vo,pk,broll} → ../../work/{voice,new,vo,pk,broll}
 #             — voice isolation, transcripts and carriers are made once for the pool; without the links an episode's
-#             match_loudness / make_proxies silently fell back to the camera sound (audit 2026-10-22).
+#             make_proxies silently fell back to the camera sound (audit 2026-10-22).
 #             Each episode is then a normal project (scaffold.sh <path>/epN; its cutlist.json, proxies, reel/ are its own).
 # Never reuses an existing folder's files: existing dirs and links are kept, nothing is overwritten.
 set -e
@@ -23,10 +23,12 @@ if [ "$N" -gt 0 ]; then
   mkdir -p "$P"/work/{voice/out,new,vo,pk,broll}
   for i in $(seq 1 $N); do
     mkdir -p "$P/ep$i/work" "$P/ep$i/out"; [ -e "$P/ep$i/assets" ] || ln -s ../assets "$P/ep$i/assets"
-    # the pool's isolated voice, transcripts, carriers, Parakeet maps and b-roll are shared; work/voice/matched stays per episode
-    # (match_loudness gains depend on the episode's own ranges — a shared folder let episodes overwrite each other)
+    # the pool's restored voice, transcripts, carriers, Parakeet maps and b-roll are shared; work/voice/dialogue.json stays per
+    # episode (dialogue.py's gains depend on the episode's own ranges — a shared folder let episodes overwrite each other)
     mkdir -p "$P/ep$i/work/voice"; [ -e "$P/ep$i/work/voice/out" ] || ln -s "../../../work/voice/out" "$P/ep$i/work/voice/out"
     for d in new vo pk broll; do [ -e "$P/ep$i/work/$d" ] || ln -s "../../work/$d" "$P/ep$i/work/$d"; done
   done
 fi
-echo "PROJECT_OK $P $( [ "$N" -gt 0 ] && echo "episodes=$N (epN/work/{voice/out,new,vo,pk,broll} → shared pool)" )"
+# an external volume (another device than $HOME): say so — scaffold.sh keeps node_modules on the internal disk there
+EXT=$(python3 -I -c "import os,sys; print('external volume' if os.stat(sys.argv[1]).st_dev != os.stat(os.path.expanduser('~')).st_dev else '')" "$P")
+echo "PROJECT_OK $P $( [ "$N" -gt 0 ] && echo "episodes=$N (epN/work/{voice/out,new,vo,pk,broll} → shared pool)" ) ${EXT}"

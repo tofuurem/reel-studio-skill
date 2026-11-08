@@ -1,6 +1,7 @@
 import React from "react";
 import { Video } from "@remotion/media";
 import { AbsoluteFill, Easing, interpolate, staticFile, useCurrentFrame, useVideoConfig } from "remotion";
+import { DIALOGUE } from "./dialogueSrc";
 import { N } from "./numbers";
 import { H, W, footagePath } from "./theme";
 import { useDirBlur } from "./ui/DirBlur";
@@ -88,6 +89,8 @@ export const Clip: React.FC<Props> = ({
   const { durationInFrames } = useVideoConfig();
   const realLen = hold ?? durationInFrames;
 
+  // the dialogue stem (dialogue.py) carries the voice: the proxy's own sound would double it
+  const muted = DIALOGUE !== null;
   const vol = (f: number) => {
     const base = typeof volume === "function" ? volume(f) : volume;
     if (f >= realLen) return 0;
@@ -149,12 +152,12 @@ export const Clip: React.FC<Props> = ({
               const g = cropGeometry(crop, srcW, srcH);
               return (
                 <div style={{ position: "absolute", ...g.box, overflow: "hidden" }}>
-                  <Video src={staticFile(footagePath(src))} trimBefore={trimBefore} volume={vol} playbackRate={playbackRate} style={{ position: "absolute", ...g.video }} />
+                  <Video src={staticFile(footagePath(src))} trimBefore={trimBefore} volume={vol} muted={muted} playbackRate={playbackRate} style={{ position: "absolute", ...g.video }} />
                 </div>
               );
             })()
           ) : (
-            <Video src={staticFile(footagePath(src))} trimBefore={trimBefore} volume={vol} playbackRate={playbackRate} objectFit={fit ?? (framing ? "contain" : "cover")} style={{ width: "100%", height: "100%" }} />
+            <Video src={staticFile(footagePath(src))} trimBefore={trimBefore} volume={vol} muted={muted} playbackRate={playbackRate} objectFit={fit ?? (framing ? "contain" : "cover")} style={{ width: "100%", height: "100%" }} />
           )}
         </AbsoluteFill>
       </AbsoluteFill>

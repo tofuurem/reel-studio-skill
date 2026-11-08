@@ -16,7 +16,8 @@ Checks (OK / WARN / ERR per line):
             not carried through would ship out-of-sync captions); skipped for a silent cut list or a Reel without <Captions>
   reel      Reel.tsx newer than work/gen_reel.py, tl_words.txt and the cut list (graphics follow the words)
   covers    images referenced by src/Cover*.tsx exist in covers/public (or ../covers/public for a series)
-  swears    every swear in the transcript is masked in the captions and covered by work/bleeps.json (bleep.py runs after render)
+  swears    every swear in the transcript is masked in the captions and covered by work/bleeps.json (dialogue.py bleeps the stem)
+  audio     the dialogue stem (dialogue.py) exists, is newer than the cut list / restored voice / bleeps, and Reel.tsx plays it
   lint      lint_reel.py on reel/src (backdrop-filter / mix-blend-mode are errors)
   action    (--comp Action* or a project with work/shots.json and no cut list) every piece, matte and voice of work/shots.json
             exists, shotsData.ts is newer than shots.json and gen_action.py, ActionTrack has its preview track
@@ -150,6 +151,7 @@ if cl:
                 if a0 < float(e["start"]) - 0.01 or a1 > float(e["end"]) + 0.01: probs.append(f"{cid}: segment {a0:.2f}–{a1:.2f} s is outside the proxy window {e['start']}–{e['end']}"); break
             d = duration(out); want = float(e["end"]) - float(e["start"])
             if abs(d - want) > max(0.6, want * 0.002) and e.get("kind") != "broll": probs.append(f"{cid}: proxy {d:.2f} s, window {want:.2f} s")
+            if not e.get("lut") and os.path.exists(src) and probe(src).get("hdr") and not lut_for(src, None, LUT_MAP)[1].startswith("lut-map"): probs.append(f"{cid}: HDR source encoded without the HDR → Rec.709 LUT (grey, pale) — re-run make_proxies")
             if src in crop_srcs and zones and e.get("crop") != crop_sig(crop_keys(zones, src)): probs.append(f"{cid}: cropped {'at the centre' if not e.get('crop') else 'from older people zones'} — re-run make_proxies")
             if src in speaking and not e.get("voice") and not silent: add("WARN", "proxies", f"{folder}/{cid}: camera sound, no isolated voice")
         if probs:
@@ -159,7 +161,7 @@ if cl:
     f1, f2 = mans["footage"], mans["footage2k"]
     for cid in set(f1) & set(f2):
         if f1[cid].get("voice") != f2[cid].get("voice") or f1[cid].get("lut") != f2[cid].get("lut"): add("WARN", "proxies", f"{cid}: footage and footage2k differ in voice/LUT — re-run make_proxies --res both")
-    if need_proxies: nxt("make_proxies.py --res both --trim-to-cutlist 2 --voice-dir <work/voice/out|matched> [--extra …]")
+    if need_proxies: nxt("make_proxies.py --res both --trim-to-cutlist 2 --voice-dir work/voice/out [--extra …]")
 tmps = [p for p in glob.glob(pj("reel/public/**/*"), recursive=True) if re.search(r"\.tmp(\.|$)|\.part$", os.path.basename(p))]
 if tmps: add("ERR", "proxies", f"temp files in reel/public (the bundler dies on them): {', '.join(os.path.relpath(t, P) for t in tmps[:3])}")
 
@@ -222,14 +224,34 @@ if cl and not silent:
         else:
             miss = [w for w in sw if not any(b["startMs"] / 1000 - 0.05 <= (w["start"] + w["end"]) / 2 <= b["endMs"] / 1000 + 0.05 for b in bl)]
             if miss: add("ERR", "swears", f"not covered by bleeps.json: {', '.join(w['word'].strip() + '@' + format(w['start'], '.1f') for w in miss[:4])} — re-run the bleeps step")
+            elif (load_json(pj("work/voice/dialogue.json"), {}) or {}).get("bleeps"): add("OK", "swears", f"{len(sw)} swear(s) masked; bleeped inside the dialogue stem")
             else: add("OK", "swears", f"{len(sw)} swear(s) masked and bleeped — run bleep.py on the render")
 if cl and not silent and any(is_camera(s) for s in cl["sources"]):
     fzp = pj("work/face_zones.json")
     if not os.path.exists(fzp): add("WARN", "layout", "no work/face_zones.json — cards are placed blind"); nxt("face_zones.py")
     elif mt(fzp) < max(mt(pj("work/cutlist.json")), mt(pj("work/timeline_zoom.json"))):
         add("ERR", "layout", "work/face_zones.json is older than the cut list / timeline_zoom.json — bands are from the old cut"); nxt("face_zones.py")
-for vo in (cl or {}).get("voiceovers", []):
-    if not os.path.exists(pj("reel/public/audio", os.path.splitext(os.path.basename(vo))[0] + ".m4a")): add("WARN", "audio", f"CapCut voiceover {os.path.basename(vo)} not levelled — match_loudness.py writes reel/public/audio/<name>.m4a")
+# ---------------------------------------------------------------- dialogue stem (dialogue.py)
+dts, dwav = pj("reel/src/dialogueSrc.ts"), pj("reel/public/audio/dialogue.wav")
+stem_on = bool(os.path.exists(dts) and re.search(r'DIALOGUE[^=]*=\s*"', open(dts).read()))
+if cl and not silent and os.path.isdir(src_dir):
+    if not os.path.exists(os.path.join(src_dir, "Dialogue.tsx")):
+        add("WARN", "audio", "reel/src has no Dialogue.tsx (scaffolded before 2026-11-07): the voice plays from the proxies, cut hard and encoded twice — copy Dialogue.tsx, dialogueSrc.ts and Clip.tsx from the template, then dialogue.py")
+    elif not stem_on or not os.path.exists(dwav):
+        add("WARN", "audio", "no dialogue stem — the voice plays from the proxies"); nxt("work/dfvenv/bin/python -I $S/dialogue.py <project>")
+    else:
+        dj = load_json(pj("work/voice/dialogue.json"), {}) or {}
+        vfiles = glob.glob(pj("work/voice/out/*_DeepFilterNet3.wav"))
+        if mt(dwav) < max([mt(cl_path), mt(pj("work/bleeps.json"))] + [mt(v) for v in vfiles]):
+            add("ERR", "audio", "dialogue.wav is older than the cut list / the restored voice / bleeps.json — it would play the old cut"); nxt("work/dfvenv/bin/python -I $S/dialogue.py <project>")
+        else:
+            o = (dj.get("chain") or {}).get("out") or {}
+            add("OK", "audio", f"dialogue stem: {len(dj.get('cuts', []))} crossfaded cuts, {dj.get('bleeps', 0)} bleeps, LRA {o.get('lra')} LU")
+        if reel_txt and "<Dialogue" not in reel_txt:
+            add("ERR", "audio", "Reel.tsx does not place <Dialogue /> while Clip mutes the proxies — the reel would have no voice"); nxt("python3 -I work/gen_reel.py (reelgen.write adds it)")
+if not stem_on:
+    for vo in (cl or {}).get("voiceovers", []):
+        if not os.path.exists(pj("reel/public/audio", os.path.splitext(os.path.basename(vo))[0] + ".m4a")): add("WARN", "audio", f"CapCut voiceover {os.path.basename(vo)} has no levelled file — dialogue.py puts the voiceovers into the dialogue stem")
 
 # ---------------------------------------------------------------- lint
 if os.path.isdir(src_dir):

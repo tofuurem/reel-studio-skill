@@ -12,7 +12,7 @@ Usage: gen_timeline.py [--cutlist work/cutlist.json] [--out reel/src/Timeline.ts
   clip is placed on the canvas; face_zones.py maps the faces through it, so card bands are measured on the frame the viewer sees.
 - A CapCut draft also gets drift={0}: the user's framing is final, no slow push-in on top.
 - Every cut is softened: the outgoing clip is held (muted) for --xfade frames while the incoming one fades in
-  on top (audio still switches exactly on the cut). A segment with "transition": "whip" gets a whip-pan
+  on top (the sound: dialogue.py's stem crossfades every cut; without a stem the proxy's sound switches exactly on the cut). A segment with "transition": "whip" gets a whip-pan
   (blur + slide) instead of the dissolve; "audioFadeIn": N ramps its sound over N frames (cut inside a word).
   Hard cuts read as jerky in reels; 6–8 frames is invisible as a dissolve but removes the snap.
 """

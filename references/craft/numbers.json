@@ -183,13 +183,6 @@
      "used": "render.sh"
     },
     {
-     "key": "sourceLufs",
-     "value": -24,
-     "what": "each speech source after match_loudness.py (LUFS over its used ranges)",
-     "why": "takes from different mics sit at one level",
-     "used": "match_loudness.py"
-    },
-    {
      "key": "bedUnder",
      "value": 0.18,
      "what": "music bed under speech",
@@ -424,6 +417,27 @@
      "what": "cover 1:1 crop, top (bottom 1500); faces and the word stay inside",
      "why": "old square grid",
      "used": "Cover.tsx guides"
+    },
+    {
+     "key": "wideMargin",
+     "value": 54,
+     "what": "16:9 canvas: margin of titles, HUDs and cards (px on 1920×1080)",
+     "why": "5 % of the frame; the Instagram safe zones do not apply to a horizontal video",
+     "used": "face_zones.py (freeLeft / freeRight), project scenes"
+    },
+    {
+     "key": "wideBandTop",
+     "value": 54,
+     "what": "16:9 canvas: top of the card band",
+     "why": "no reel header on a horizontal video",
+     "used": "face_zones.py"
+    },
+    {
+     "key": "wideBandBottom",
+     "value": 860,
+     "what": "16:9 canvas: bottom of the card band",
+     "why": "captions sit at y ≈ 880–960 (Captions.tsx LANDSCAPE)",
+     "used": "face_zones.py"
     }
    ]
   },
@@ -555,7 +569,7 @@
    ]
   },
   {
-   "title": "Voice bus (two mics, levels, taming)",
+   "title": "Voice chain (voice_clean.py restores each source → dialogue.py builds and processes one dialogue stem → render.sh masters)",
    "rows": [
     {
      "key": "dualmicAtten",
@@ -576,70 +590,231 @@
      "value": -22.0,
      "what": "active speech level of every clip before the render's static gain (dBFS)",
      "why": "clips varied by up to 25 dB between cameras and mics",
-     "used": "voice_mix.py"
+     "used": "dialogue.py"
     },
     {
      "key": "voiceMaxGain",
      "value": 9.0,
      "what": "most a quiet clip is lifted (dB)",
      "why": "+18 dB lifted mic hiss and DeepFilterNet artefacts into «a speaker about to blow»",
-     "used": "voice_mix.py"
+     "used": "dialogue.py"
     },
     {
      "key": "voiceSegLo",
      "value": -26.0,
      "what": "a speech segment quieter than this is lifted (dBFS)",
      "why": "a whisper inside a loud clip",
-     "used": "voice_mix.py"
+     "used": "dialogue.py"
     },
     {
      "key": "voiceSegHi",
      "value": -19.0,
      "what": "a speech segment louder than this is lowered (dBFS)",
      "why": "a shout inside a calm clip",
-     "used": "voice_mix.py"
+     "used": "dialogue.py"
     },
     {
      "key": "voiceSegMax",
      "value": 4.0,
      "what": "most a single segment is moved (dB)",
      "why": "±10 dB per segment pumped the noise floor",
-     "used": "voice_mix.py"
+     "used": "dialogue.py"
     },
     {
      "key": "ambDb",
      "value": -30.0,
      "what": "camera sound under a picture beat (\"amb\"), active level (dBFS)",
      "why": "a dance or a ride in digital silence feels dead in a vlog without music",
-     "used": "voice_mix.py"
+     "used": "dialogue.py"
     },
     {
      "key": "rawDb",
      "value": -22.0,
      "what": "camera sound instead of the voice (\"raw\") (dBFS)",
      "why": "DeepFilterNet swallowed a voice inside a costume",
-     "used": "voice_mix.py"
+     "used": "dialogue.py"
     },
     {
-     "key": "tameOverDb",
-     "value": 6.0,
-     "what": "compressor threshold above voiceTargetDb (dB)",
-     "why": "a shout into a close lav sat 7 dB over the speech",
-     "used": "voice_mix.py"
+     "key": "declipMinSamples",
+     "value": 20,
+     "what": "samples at |x| ≥ 0.985 before a source counts as clipped and gets adeclip",
+     "why": "adeclip on clean audio still rewrote the samples (diff up to −34 dBFS, 2026-11-07 audit)",
+     "used": "voice_clean.py, dualmic.py"
     },
     {
-     "key": "tameRatio",
+     "key": "noiseTargetDb",
+     "value": 48,
+     "what": "how far under the speech the residual noise should sit after cleanup (dB); DeepFilterNet's limit = this − the source SNR",
+     "why": "full-strength DeepFilterNet turned every pause into digital silence (−69 dB) and cut −3 dB at 3.15 kHz out of the voice; a floor ≈ 48 dB down is inaudible under −16 LUFS speech and keeps the pauses natural",
+     "used": "voice_clean.py"
+    },
+    {
+     "key": "dfnMinAtten",
+     "value": 6,
+     "what": "smallest DeepFilterNet limit used (dB); a source with SNR ≥ noiseTargetDb skips DeepFilterNet",
+     "why": "a quiet room needs no neural cleanup — every pass costs some timbre",
+     "used": "voice_clean.py"
+    },
+    {
+     "key": "dfnMaxAtten",
+     "value": 18,
+     "what": "largest DeepFilterNet limit (dB)",
+     "why": "more than ≈ 18 dB pumps the noise between words and hollows the voice («из толчка», «underwater»)",
+     "used": "voice_clean.py"
+    },
+    {
+     "key": "cutXfadeMs",
+     "value": 10,
+     "what": "equal-power crossfade on every jump cut of the dialogue (ms, centred on the cut, from source handles)",
+     "why": "a hard switch of the waveform clicks; 2–10 ms is the dialogue-editing norm, longer smears consonants",
+     "used": "dialogue.py"
+    },
+    {
+     "key": "joinXfadeMs",
+     "value": 40,
+     "what": "linear crossfade where two segments continue the same take (a gain change, not a cut)",
+     "why": "",
+     "used": "dialogue.py"
+    },
+    {
+     "key": "hpfHz",
+     "value": 80,
+     "what": "high-pass of the voice (12 dB/oct)",
+     "why": "rumble, wind and lav handling noise live under the voice's fundamental (85–180 Hz)",
+     "used": "voicelib.py"
+    },
+    {
+     "key": "phaseRotHz",
+     "value": 300,
+     "what": "centre of the phase rotator (4 all-pass sections, Q 0.7) after the high-pass",
+     "why": "speech waveforms are lopsided (+0.92 / −0.71 on the 2026-11-05 reel): rotating the phase lowers the peaks ≈ 2.5 dB without changing the spectrum (broadcast voice processing), so the limiter works less",
+     "used": "voicelib.py"
+    },
+    {
+     "key": "eqAmount",
+     "value": 0.7,
+     "what": "share of the measured deviation from the target speech spectrum that the tonal EQ corrects",
+     "why": "a partial match keeps the speaker's own timbre",
+     "used": "voicelib.py"
+    },
+    {
+     "key": "eqMaxCut",
+     "value": 4.0,
+     "what": "deepest mud (315 Hz) / box (900 Hz) cut (dB)",
+     "why": "",
+     "used": "voicelib.py"
+    },
+    {
+     "key": "eqMaxBoost",
+     "value": 4.0,
+     "what": "largest presence boost at 3.5 kHz (dB)",
+     "why": "the DJI lav under clothing sat ~20 dB down at 2–5 kHz vs its 400–500 Hz peak: dull, «muffled»",
+     "used": "voicelib.py"
+    },
+    {
+     "key": "eqMaxAir",
      "value": 3.0,
-     "what": "compressor ratio above the threshold",
-     "why": "gentle: the shout stays a shout",
-     "used": "voice_mix.py"
+     "what": "largest air boost (9 kHz shelf, dB)",
+     "why": "more lifts the lav's hiss and the AAC artefacts of the camera track",
+     "used": "voicelib.py"
     },
     {
-     "key": "tameCeilDb",
-     "value": -12.0,
-     "what": "look-ahead limiter ceiling before the render gain (dBFS)",
-     "why": "render.sh adds ≈ +9 dB; a 5 ms hard limiter on top crackled («колонки хрипят»)",
-     "used": "voice_mix.py"
+     "key": "compOverDb",
+     "value": 4.0,
+     "what": "the one compressor's threshold over the leveled speech (dB over voiceTargetDb)",
+     "why": "three compressors/limiters in a row squeezed LRA from 8.5 to 2.6 LU; +2 dB / 2.5:1 on 10 ms frames still gave 3.9 LU on the 2026-11-05 reel, +4 / 2:1 / 30 ms gives 5.0",
+     "used": "voicelib.py"
+    },
+    {
+     "key": "compRatio",
+     "value": 2.0,
+     "what": "its ratio",
+     "why": "",
+     "used": "voicelib.py"
+    },
+    {
+     "key": "compKneeDb",
+     "value": 6.0,
+     "what": "its soft knee (dB)",
+     "why": "",
+     "used": "voicelib.py"
+    },
+    {
+     "key": "compAttackMs",
+     "value": 15.0,
+     "what": "its attack (ms)",
+     "why": "",
+     "used": "voicelib.py"
+    },
+    {
+     "key": "compReleaseMs",
+     "value": 200.0,
+     "what": "its release (ms)",
+     "why": "",
+     "used": "voicelib.py"
+    },
+    {
+     "key": "compWindowMs",
+     "value": 30,
+     "what": "its RMS detector window (ms)",
+     "why": "10 ms frames compressed inside syllables",
+     "used": "voicelib.py"
+    },
+    {
+     "key": "deessOverDb",
+     "value": -6.0,
+     "what": "de-esser acts where the 6.5 kHz band is louder than the speech level + this (dB) and dominates the frame",
+     "why": "a dark lav needs none; a bright one gets 2–4 dB on each «с/ш»",
+     "used": "voicelib.py"
+    },
+    {
+     "key": "deessMaxDb",
+     "value": 6.0,
+     "what": "deepest de-esser cut (dB)",
+     "why": "",
+     "used": "voicelib.py"
+    },
+    {
+     "key": "stemLufs",
+     "value": -24.0,
+     "what": "integrated loudness of the finished dialogue stem (reel/public/audio/dialogue.wav)",
+     "why": "the music bed and SFX levels were tuned against speech at about this level; render.sh lifts the whole mix to targetLufs",
+     "used": "dialogue.py"
+    },
+    {
+     "key": "stemPeakDb",
+     "value": -10.0,
+     "what": "look-ahead peak ceiling of the stem (dBFS)",
+     "why": "speech off a lav peaks 18–23 dB over its loudness; at −12 the limiter worked 31–66 % of the time (audible), at −10 ≈ 12 % with ≤ 5 dB on the rare peaks; render.sh adds ≈ +8 dB and its true-peak limiter catches the rest",
+     "used": "voicelib.py"
+    },
+    {
+     "key": "truePeakDb",
+     "value": -1.5,
+     "what": "master true-peak ceiling (dBTP; 4× oversampled limiter in render.sh)",
+     "why": "sample-peak limiting let inter-sample peaks through; AAC adds ≈ 0.5 dB more",
+     "used": "render.sh"
+    },
+    {
+     "key": "aacBitrate",
+     "value": "320k",
+     "what": "final AAC bitrate (the only lossy encode of the sound; Remotion renders PCM)",
+     "why": "proxies 192k → Remotion 320k → final 192k = three extra generations on top of the camera's AAC",
+     "used": "render.sh"
+    },
+    {
+     "key": "lraMax",
+     "value": 9.0,
+     "what": "audio_qa warns above this loudness range of the final mix (LU)",
+     "why": "",
+     "used": "audio_qa.py"
+    },
+    {
+     "key": "lraMin",
+     "value": 3.0,
+     "what": "audio_qa warns below this (LU): over-compressed",
+     "why": "the 2026-11-05 reel shipped at 2.6 LU",
+     "used": "audio_qa.py"
     }
    ]
   },
@@ -680,6 +855,53 @@
      "what": "bars per musical phrase on the reel grid (whips and big moments go on phrase starts)",
      "why": "Cudi «Pursuit Of Happiness (Nightmare)»: sections every 4 bars from the drop (frames 218/468/718/967/1217)",
      "used": "track_beats.py, actiongen.py"
+    }
+   ]
+  },
+  {
+   "title": "Motion timing",
+   "rows": [
+    {
+     "key": "entranceMaxFrames",
+     "value": 24,
+     "what": "longest entrance of one element (frames); a longer build is a stagger of several elements",
+     "why": "HyperFrames motion doctrine (2026-11-08): a single slow element reads as lag",
+     "used": "motion-design.md «Seams», blocks/*"
+    },
+    {
+     "key": "staggerMaxFrames",
+     "value": 15,
+     "what": "total stagger of one group of items (first start → last start)",
+     "why": "a longer cascade makes the viewer wait for the last item",
+     "used": "motion-design.md, blocks/*, ChipRow / RepoCard lists"
+    },
+    {
+     "key": "exitShare",
+     "value": 0.75,
+     "what": "an exit lasts this share of the matching entrance",
+     "why": "leaving is faster than arriving; the eye has already read it",
+     "used": "motion-design.md"
+    },
+    {
+     "key": "payoffPauseMin",
+     "value": 9,
+     "what": "shortest still beat between an action and its result (frames)",
+     "why": "the dramatic comma: count-up ends → hold → the stamp lands; straight to the result loses it",
+     "used": "motion-design.md «Seams»"
+    },
+    {
+     "key": "payoffPauseMax",
+     "value": 22,
+     "what": "longest still beat before a payoff (frames)",
+     "why": "longer reads as a stall",
+     "used": "motion-design.md «Seams»"
+    },
+    {
+     "key": "transitionKindsMax",
+     "value": 3,
+     "what": "kinds of scene transition in one reel (dissolve, hand-off, whip …), repeated",
+     "why": "a new transition per chapter reads as a template showcase",
+     "used": "motion-design.md «Seams»"
     }
    ]
   }

@@ -9,7 +9,8 @@ Usage: python3 -I inventory.py <project> <files|dirs>… [--lut <cube>] [--lut-m
   <project>/work/<name>/images.jpg    thumbnails of the images (6 per row)
   More than 36 tiles → camera_1.jpg, camera_2.jpg … (36 per sheet; one giant sheet is unreadable).
 Kinds follow ingest.py (camera = any video that is not a screen recording or in assets/video, screen = «Запись экрана»/Screen Recording/rec_*, video, audio, image). The LUT goes on
-camera clips only, per clip (common.lut_for: --lut-map, --lut; otherwise none). "silent" =
+camera clips only, per clip (common.lut_for: --lut-map, --lut; otherwise none), and on every HDR video (HLG / PQ: iPhone «HDR»,
+a camera in HLG mode) as the HDR → Rec.709 LUT — the sheets show what the proxies will look like. "silent" =
 no audio stream or mean level under −70 dB over the first 2 min: do not transcribe those (Whisper invents «Продолжение
 следует…» on silence). ffmpeg here has no drawtext, so tiles carry no labels — a frame that cannot be grabbed becomes a grey
 tile, so the tile order always equals the table order. AppleDouble `._*` files are skipped.
@@ -72,6 +73,7 @@ def note(r):
     elif r["kind"] in ("screen", "video", "camera") and (r.get("fps") or 0) > 31: n.append(f"{r['fps']:.0f} fps: proxies retime to 30")
     if r.get("rot"): n.append(f"rotated {r['rot']}° (size shown as displayed)")
     if r["kind"] == "camera" and not r.get("lut"): n.append("NO LUT FOUND (D-Log will look grey)")
+    if r.get("hdr"): n.append(f"HDR {r['hdr'].upper()}: converted to Rec.709 by {r.get('lut') or 'the HDR LUT'} (hdr_lut.py)")
     if r["kind"] == "audio" and r.get("dur", 0) > LONG_AUDIO: n.append("long audio: voiceover monologue or music?")
     elif r.get("dur", 0) > 240: n.append("long take: --trim-to-cutlist")
     return "; ".join(n)
@@ -83,7 +85,7 @@ for f in files(a.paths):
     info = probe(f) if k != "image" else {kk: v for kk, v in probe(f).items() if kk in ("w", "h")}   # images: size only
     lv = level(f) if k in ("camera", "screen", "video", "audio") and info.get("has_audio", k == "audio") else None
     silent = k != "image" and (lv is None or lv < -70)
-    lut, why = lut_for(f, a.lut, LUT_MAP, info) if k == "camera" else (None, "")
+    lut, why = lut_for(f, a.lut, LUT_MAP, info) if k in ("camera", "screen", "video") else (None, "")
     shot = datetime.datetime.fromtimestamp(os.path.getmtime(f)).strftime("%Y-%m-%d %H:%M")
     rows.append({"kind": k, "file": f, **info, "level": lv, "silent": silent, "lut": os.path.basename(lut) if lut else None, "lut_why": why, "shot": shot, "mb": round(os.path.getsize(f) / 1048576, 1)})
     i = len(rows); fit = "scale={w}:{h}:force_original_aspect_ratio=decrease,pad={w}:{h}:(ow-iw)/2:(oh-ih)/2:color=0x333333"
@@ -91,7 +93,8 @@ for f in files(a.paths):
         t = min(4.0, info.get("dur", 0) / 2); vf = (f"lut3d=file='{lut}':interp=tetrahedral," if lut else "") + fit.format(w=216, h=384)
         cam.append(grab(f, t, vf, os.path.join(OUT, f"_c{i:03d}.jpg"), 216, 384))
     elif k in ("screen", "video"):
-        for j in (1, 2, 3): scr.append(grab(f, info.get("dur", 0) * j / 4, fit.format(w=480, h=300), os.path.join(OUT, f"_s{i:03d}_{j}.jpg"), 480, 300))
+        pre = f"lut3d=file='{lut}':interp=tetrahedral," if lut else ""   # an HDR phone clip: the sheet shows what the proxy will look like
+        for j in (1, 2, 3): scr.append(grab(f, info.get("dur", 0) * j / 4, pre + fit.format(w=480, h=300), os.path.join(OUT, f"_s{i:03d}_{j}.jpg"), 480, 300))
     elif k == "image":
         img.append(grab(f, 0, fit.format(w=300, h=300), os.path.join(OUT, f"_i{i:03d}.jpg"), 300, 300))
 

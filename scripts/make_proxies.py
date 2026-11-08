@@ -16,6 +16,8 @@ Usage:
   the old centre crop on purpose. The keyframes are in the manifest («crop»), so a changed crop re-encodes that clip.
 - LUT (log → Rec.709) is burned into camera clips only, and only when one is known: per clip via common.lut_for — --lut-map glob, then --lut or the
   draft's LUT; otherwise none (Rec.709 assumed). Chrome cannot colour-manage log footage.
+  An HDR source (HLG / PQ — iPhone «HDR video», Android HDR10, a camera in HLG mode; any kind) gets the HDR → Rec.709 LUT from
+  hdr_lut.py instead (fitted to Apple's own conversion): tagged bt709 without it, HLG looks grey, flat and pale.
 - `-map 0:v:0` because DJI files carry a second (preview) video stream that breaks muxing.
 - With --voice-dir the isolated-voice WAV replaces the camera track (same length, so sync is kept).
 - --trim-to-cutlist PAD encodes only the used part of each source (± PAD s; speed-changed CapCut segments use their source
@@ -136,7 +138,9 @@ def vchain(W, H, cam, ntsc, lut, keys=None, start=0.0, info=None):
         sw = round(info["w"] * H / info["h"] / 2) * 2
         size = f"scale={sw}:{H}:flags=lanczos,crop={W}:{H}:{crop_expr(keys, start, sw, W)}:0"
     else: size = f"scale={W}:{H}:force_original_aspect_ratio=increase:flags=lanczos,crop={W}:{H}" if cam else f"scale={W}:-2:flags=lanczos"
-    return pre + size + (f",lut3d=file='{lut}':interp=tetrahedral" if lut else "")
+    # setparams: the LUT's output is Rec.709 — say so, or an HDR source's HLG / BT.2020 tags ride through to the proxy and
+    # Chrome tone-maps the converted picture a second time
+    return pre + size + (f",lut3d=file='{lut}':interp=tetrahedral,setparams=color_primaries=bt709:color_trc=bt709:colorspace=bt709" if lut else "")
 
 def inside(cid, entry):
     """A shorter cut keeps the proxies: the new window lies inside the old one in every target folder (same source, voice,
@@ -208,12 +212,12 @@ for r in RES:
     if r in targets or not manifests[r]: continue
     stale = [cid for cid, off in offsets.items() if cid in manifests[r] and abs(manifests[r][cid].get("start", 0) - off) > 0.01]
     if stale: print(f"WARNING: {RES[r][0]} was cut from other windows for {', '.join(stale)} — re-run with --res {r} (or both) before rendering {'Reel2K' if r == '2k' else 'Reel'}")
-# voiceovers recorded inside CapCut → public/audio (the levelled .m4a from match_loudness.py wins; the raw file is only a fallback)
+# voiceovers recorded inside CapCut → public/audio (only for projects without a dialogue stem: dialogue.py places them itself)
 au = os.path.join(a.public, "audio"); os.makedirs(au, exist_ok=True)
 for v in cl.get("voiceovers", []):
     m4a = os.path.join(au, os.path.splitext(os.path.basename(v))[0] + ".m4a"); dst = os.path.join(au, os.path.basename(v))
     if os.path.exists(m4a): continue
-    if not os.path.exists(dst) and os.path.exists(v): __import__("shutil").copy2(v, dst); print("voiceover copied raw (run match_loudness.py for the levelled .m4a):", dst)
+    if not os.path.exists(dst) and os.path.exists(v): __import__("shutil").copy2(v, dst); print("voiceover copied raw (dialogue.py puts it into the dialogue stem):", dst)
 if camaudio: print("NOTE: no isolated voice for", ", ".join(camaudio), "— their proxies carry the camera sound" + ("" if a.voice_dir else " (no --voice-dir given)"))
 if failed: print("FAILED:", *failed, sep="\n  "); sys.exit(1)
 if missing and not a.allow_missing: print(f"PROXIES_INCOMPLETE {len(missing)} missing source(s) — mount the volume and re-run (or --allow-missing)"); sys.exit(1)

@@ -4,14 +4,17 @@
 # Use it to scout b-roll in neighbouring shoot folders before transcoding anything. Tiles follow the printed order
 # ("1 DJI_…_0005_D.MP4 …"); DJI reuses its 4-digit counter across days, so tiles are keyed by position, not by counter.
 set -e; setopt null_glob
-DIR=$1; OUT=$2; LUT=$3; TMP=$(mktemp -d)
+DIR=$1; OUT=$2; LUT=$3; TMP=$(mktemp -d); SK=$(cd "$(dirname "$0")" && pwd); HDRD=$HOME/.cache/reel-studio/luts
 case "$OUT" in /*) ;; *) OUT="$PWD/$OUT";; esac   # the script cd's into the footage folder
 cd "$DIR"; i=0
 for f in *.MP4 *.mp4 *.MOV *.mov; do
   [ -f "$f" ] || continue; case "$f" in ._*) continue;; esac
   i=$((i+1)); echo "$i $f"
   d=$(ffprobe -v error -show_entries format=duration -of csv=p=0 "$f")
-  VF="scale=135:240:force_original_aspect_ratio=decrease,pad=135:240:(ow-iw)/2:(oh-ih)/2"; [ -n "$LUT" ] && VF="lut3d=file='$LUT',$VF"
+  VF="scale=135:240:force_original_aspect_ratio=decrease,pad=135:240:(ow-iw)/2:(oh-ih)/2"; L=$LUT
+  case "$(ffprobe -v error -select_streams v:0 -show_entries stream=color_transfer -of csv=p=0 "$f")" in   # HDR phone / HLG clips: their own LUT
+    arib-std-b67*) L=$HDRD/HLG_BT2020_to_Rec709.cube;; smpte2084*) L=$HDRD/PQ_BT2020_to_Rec709.cube;; esac
+  [ -n "$L" ] && { [ -f "$L" ] || python3 -I "$SK/hdr_lut.py" >/dev/null; VF="lut3d=file='$L',$VF"; }
   t="$TMP/$(printf %04d $i).jpg"
   ffmpeg -v error -nostdin -y -ss $(python3 -c "print(min(5,${d:-0}/2))") -i "$f" -frames:v 1 -vf "$VF" "$t" 2>/dev/null || true
   [ -f "$t" ] || ffmpeg -v error -nostdin -y -f lavfi -i "color=c=0x555555:s=135x240:d=0.04" -frames:v 1 "$t"   # keep positions

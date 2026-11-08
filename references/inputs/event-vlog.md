@@ -26,9 +26,9 @@ rounds of feedback). It is the raw-takes entry (`inputs/raw-takes.md`) with thes
    (`"exact": true, "amb": true`) only where the picture tells something (a dance, a ride, a view). `cut_from_transcript.py`
    prints `GROWN` (ranges extended to the sentence edge) and `MID-SENTENCE` (what is still cut inside a sentence) — fix those.
    Far-apart ranges of one long take become alias clips (`splitWindows`), so the proxies stay short.
-4. **Voice bus.** `work/dfvenv/bin/python -I $S/voice_mix.py <project>` → `work/voice/mixed/` (per-clip level, per-segment
-   leveling, camera sound under `amb` beats, the tame compressor/limiter) → `make_proxies.py … --voice-dir work/voice/mixed`.
-   Re-run after every re-cut (it rewrites only changed clips, so make_proxies re-encodes only those).
+4. **Voice.** `dualmic.py --cutlist` restores each lav clip (proxies take `--voice-dir work/voice/out`); after the timeline,
+   `work/dfvenv/bin/python -I $S/dialogue.py <project>` builds the vlog's one dialogue stem: per-clip level, per-segment
+   leveling, camera sound under `amb` beats, crossfaded cuts, room tone, one chain (`craft/audio.md`). Re-run after every re-cut.
 5. **Night.** After the proxies: `python3 -I $S/night_lift.py <project>` lifts the shadows of dark clips (per clip, by mean
    luma); re-run after make_proxies re-encodes one (doctor warns).
 6. **Graphics**: chapter tags and a title, few cards — the people and the event are the content. A title behind a person

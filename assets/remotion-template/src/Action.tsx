@@ -21,7 +21,7 @@ export type Shot = {
   note: string; frames: number; pieces: Piece[]; hold?: number; voice?: string; voiceAt?: number; voiceGain?: number;
   whip?: "left" | "right"; punch?: [number, number]; punchAt?: number; flashAt?: number; shake?: boolean; shakeAt?: number;
   caption?: string; captionAt?: number; captionTail?: number; battery?: number; sfx?: [number, string][];
-  behind?: { title: string; kicker?: string; at?: number; until?: number; y?: number };
+  behind?: { title: string; kicker?: string; at?: number; until?: number; y?: number; x?: number; scale?: number };
 };
 
 const clamp = { extrapolateLeft: "clamp", extrapolateRight: "clamp" } as const;
@@ -74,9 +74,9 @@ const ShotView: React.FC<{ s: Shot }> = ({ s }) => {
             </Freeze>
           </Sequence>
         ) : null}
-        {s.behind ? <BehindTitle title={s.behind.title} kicker={s.behind.kicker} at={s.behind.at ?? 2} until={s.behind.until ?? s.frames} y={s.behind.y} /> : null}
+        {s.behind ? <BehindTitle title={s.behind.title} kicker={s.behind.kicker} at={s.behind.at ?? 2} until={s.behind.until ?? s.frames} y={s.behind.y} x={s.behind.x} scale={s.behind.scale} /> : null}
         {s.behind ? <AbsoluteFill>{layer(true)}</AbsoluteFill> : null /* positioned, or the absolute title paints over it */}
-        {s.behind?.kicker ? <BehindTitle part="front" title={s.behind.title} kicker={s.behind.kicker} at={s.behind.at ?? 2} until={s.behind.until ?? s.frames} y={s.behind.y} /> : null}
+        {s.behind?.kicker ? <BehindTitle part="front" title={s.behind.title} kicker={s.behind.kicker} at={s.behind.at ?? 2} until={s.behind.until ?? s.frames} y={s.behind.y} x={s.behind.x} scale={s.behind.scale} /> : null}
       </AbsoluteFill>
       {blur.defs}
       {s.flashAt !== undefined ? <AbsoluteFill style={{ background: "white", opacity: interpolate(f, [s.flashAt, s.flashAt + 1, s.flashAt + 6], [0, N.flashPeak, 0], clamp) }} /> : null}
