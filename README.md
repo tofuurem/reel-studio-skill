@@ -17,11 +17,15 @@ git clone https://github.com/tofuurem/reel-studio-skill ~/.claude/skills/reel-st
 python3 -I ~/.claude/skills/reel-studio/scripts/deps.py --install
 ```
 
-Обновить уже установленный скилл (подтягивает новую версию и доставляет то, что ей нужно, например yt-dlp):
+## Обновление
 
-```bash
-git -C ~/.claude/skills/reel-studio pull && python3 -I ~/.claude/skills/reel-studio/scripts/deps.py --install
+Вставь в Claude Code или Codex:
+
+```text
+Обнови скилл reel-studio: найди, куда он установлен (обычно ~/.claude/skills/reel-studio), сделай там git pull и коротко расскажи, что изменилось. Если в папке есть мои локальные правки или pull конфликтует, ничего не затирай и сначала спроси меня. Затем запусти python3 -I <папка скилла>/scripts/deps.py --install и доведи до DEPS_OK: новая версия может требовать новых инструментов. То, что требует пароля, дай мне выполнить самому.
 ```
+
+Или вручную: `git -C ~/.claude/skills/reel-studio pull`, затем `python3 -I ~/.claude/skills/reel-studio/scripts/deps.py --install`.
 
 Проект создаётся в папке, где открыт Claude Code. Перед созданием Claude спросит, туда ли. Постоянную папку для проектов можно задать в `REEL_STUDIO_PROJECTS`.
 
