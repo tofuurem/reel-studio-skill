@@ -9,7 +9,7 @@ Usage: python3 -I inventory.py <project> <files|dirs>… [--lut <cube>] [--lut-m
   <project>/work/<name>/images.jpg    thumbnails of the images (6 per row)
   More than 36 tiles → camera_1.jpg, camera_2.jpg … (36 per sheet; one giant sheet is unreadable).
 Kinds follow ingest.py (camera = any video that is not a screen recording or in assets/video, screen = «Запись экрана»/Screen Recording/rec_*, video, audio, image). The LUT goes on
-camera clips only, per clip (common.lut_for: --lut-map, --lut; otherwise none), and on every HDR video (HLG / PQ: iPhone «HDR»,
+camera clips only, per clip (common.lut_for: --lut-map, the DJI colour profile in the file, --lut; otherwise none), and on every HDR video (HLG / PQ: iPhone «HDR»,
 a camera in HLG mode) as the HDR → Rec.709 LUT — the sheets show what the proxies will look like. "silent" =
 no audio stream or mean level under −70 dB over the first 2 min: do not transcribe those (Whisper invents «Продолжение
 следует…» on silence). ffmpeg here has no drawtext, so tiles carry no labels — a frame that cannot be grabbed becomes a grey
@@ -17,7 +17,7 @@ tile, so the tile order always equals the table order. AppleDouble `._*` files a
 """
 import argparse, json, os, subprocess, sys, unicodedata, datetime
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from common import is_camera, load_lut_map, lut_for, nfc, probe
+from common import is_camera, load_lut_map, looks_log, lut_for, nfc, probe
 
 ap = argparse.ArgumentParser(); ap.add_argument("project"); ap.add_argument("paths", nargs="+"); ap.add_argument("--lut"); ap.add_argument("--lut-map"); ap.add_argument("--name", default="inventory")
 a = ap.parse_args()
@@ -72,7 +72,9 @@ def note(r):
     if r.get("vfr"): n.append(f"VFR (avg {r['fps']:.1f}, max {r['r_fps']:.0f} fps): proxies make it constant 30")
     elif r["kind"] in ("screen", "video", "camera") and (r.get("fps") or 0) > 31: n.append(f"{r['fps']:.0f} fps: proxies retime to 30")
     if r.get("rot"): n.append(f"rotated {r['rot']}° (size shown as displayed)")
-    if r["kind"] == "camera" and not r.get("lut"): n.append("NO LUT FOUND (D-Log will look grey)")
+    why = str(r.get("lut_why", ""))
+    if why.startswith("NO LUT FOUND"): n.append(why)   # the file itself says D-Log / D-Log M and its cube is not installed
+    elif r["kind"] == "camera" and not r.get("lut") and looks_log(r["file"]) and not why.startswith(("djmd", "lut-map")): n.append("no LUT: fine for Normal / Rec.709, grey if it is D-Log (--lut)")
     if r.get("hdr"): n.append(f"HDR {r['hdr'].upper()}: converted to Rec.709 by {r.get('lut') or 'the HDR LUT'} (hdr_lut.py)")
     if r["kind"] == "audio" and r.get("dur", 0) > LONG_AUDIO: n.append("long audio: voiceover monologue or music?")
     elif r.get("dur", 0) > 240: n.append("long take: --trim-to-cutlist")

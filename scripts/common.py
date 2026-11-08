@@ -19,6 +19,18 @@ N = {r["key"]: r["value"] for s in _NUM["sections"] for r in s["rows"]}
 CACHE = os.path.expanduser("~/.cache/reel-studio")
 LUT_DIR = os.path.join(CACHE, "luts"); FONTS_DIR = os.path.join(CACHE, "fonts")
 FONTS = ("Unbounded.ttf", "Montserrat.ttf", "JetBrainsMono.ttf")
+POCKET4P_LUT = "DJI OSMO Pocket 4P D-Log to Rec.709 V2.0 size33.cube"
+ACTION5PRO_LUT = "DJI OSMO Action 5 Pro D-Log M to Rec.709 V1.cube"
+ACTION4_LUT = "DJI OSMO Action 4 D-Log M to Rec.709 V1.cube"
+# The colour profile a DJI camera writes into its «djmd» metadata track (protobuf; checked on 855 clips, 2026-11-08):
+# proto name → field path of the profile code.
+DJI_COLOR_FIELD = {"dvtm_ac204.proto": "2.4.1",            # Osmo Action 5 Pro
+                   "dvtm_osmo_pocket_4.proto": "2.2.3.1"}  # Osmo Pocket 4 and 4P
+DJI_COLOR_CODES = {0: "Normal", 2: "D-Log", 9: "HLG", 19: "D-Log-M", 22: "D-Log2"}
+# (model key from the encoder tag, profile) → DJI's own cube (download it from DJI; not shipped, assets/luts/README.md).
+# Normal needs none; HLG gets the HDR LUT; a log profile without its cube falls back to --lut, else it is reported.
+DJI_LOG_LUTS = {("pocket4p", "D-Log"): POCKET4P_LUT, ("pocket4", "D-Log"): POCKET4P_LUT,
+                ("action5pro", "D-Log-M"): ACTION5PRO_LUT, ("action4", "D-Log-M"): ACTION4_LUT}
 
 # platform: videotoolbox decode and Apple Vision exist on macOS only (deps.py lists what else differs per OS)
 HWACCEL = ["-hwaccel", "videotoolbox"] if sys.platform == "darwin" else []
@@ -41,16 +53,89 @@ def looks_log(path):
     """DJI clips are often shot in D-Log: a hint for the "no LUT" warning, not a rule (Normal-mode DJI footage needs none)."""
     return nfc(os.path.basename(os.path.realpath(path))).upper().startswith("DJI_")
 
+def find_cube(name):
+    """A camera's cube by its file name: the LUT cache, the skill's assets/luts, ~/Downloads (where DJI's download lands)."""
+    for d in (LUT_DIR, os.path.join(SKILL, "assets/luts"), os.path.expanduser("~/Downloads")):
+        p = os.path.join(d, name)
+        if os.path.exists(p): return p
+    return None
+
 def load_lut_map(path):
     """--lut-map: a JSON file or inline JSON {"DJI_*_0004*": "/abs/Action4.cube", "*rec_*": "none"} — glob on the file name (or the full path)."""
     if not path: return {}
     return json.loads(path) if path.lstrip().startswith("{") else json.load(open(path))
 
+def _varint(b, i):
+    r = s = 0
+    while True:
+        x = b[i]; i += 1
+        r |= (x & 0x7F) << s; s += 7
+        if x < 0x80: return r, i
+
+def _protobuf_fields(b, prefix="", out=None, depth=0):
+    """Schema-less protobuf walk → {"2.4.1": [19], "1.1.1": ["dvtm_ac204.proto"]} (nested messages flattened by path)."""
+    out = {} if out is None else out
+    i = 0
+    while i < len(b):
+        key, i = _varint(b, i)
+        field, wire = key >> 3, key & 7
+        if field == 0: raise ValueError("not protobuf")
+        path = f"{prefix}.{field}" if prefix else str(field)
+        if wire == 0:
+            v, i = _varint(b, i); out.setdefault(path, []).append(v)
+        elif wire == 1: i += 8
+        elif wire == 5: i += 4
+        elif wire == 2:
+            n, i = _varint(b, i); sub = b[i:i + n]; i += n; nested = {}
+            try:
+                if depth > 6 or not sub: raise ValueError
+                _protobuf_fields(sub, path, nested, depth + 1)
+            except (ValueError, IndexError):
+                nested = {}
+            if nested:
+                for k, v in nested.items(): out.setdefault(k, []).extend(v)
+            else:
+                try: out.setdefault(path, []).append(sub.decode("utf-8"))
+                except UnicodeDecodeError: pass
+        else: raise ValueError("not protobuf")
+    return out
+
+_DJI_PROFILE = {}
+
+def dji_profile(path):
+    """The colour profile a DJI camera recorded the clip in — "Normal" | "D-Log" | "D-Log-M" | "HLG" | "D-Log2" | "Code<n>" —
+    read from the first record of its «djmd» metadata track; None when the file has no such track (not DJI, re-encoded)
+    or the camera's proto is unknown. One packet is read, so it is cheap; cached per file."""
+    src = os.path.realpath(path)
+    try: key = (src, os.path.getsize(src), int(os.path.getmtime(src)))
+    except OSError: return None
+    if key in _DJI_PROFILE: return _DJI_PROFILE[key]
+    res = None
+    r = subprocess.run(["ffprobe", "-v", "error", "-show_entries", "stream=index,codec_tag_string", "-of", "csv=p=0", src], capture_output=True, text=True)
+    idx = next((ln.split(",")[0] for ln in r.stdout.splitlines() if ln.strip().endswith(",djmd")), None)
+    if idx is not None:
+        r = subprocess.run(["ffmpeg", "-v", "error", "-nostdin", "-i", src, "-map", "0:" + idx, "-c", "copy", "-frames:0", "1", "-f", "data", "pipe:1"], capture_output=True)
+        try:
+            fields = _protobuf_fields(r.stdout)
+            proto = next((v for v in fields.get("1.1.1", []) if isinstance(v, str)), None)
+            if proto in DJI_COLOR_FIELD:
+                code = (fields.get(DJI_COLOR_FIELD[proto]) or [0])[0]   # protobuf does not write a 0
+                res = DJI_COLOR_CODES.get(code, f"Code{code}")
+        except (ValueError, IndexError):
+            res = None
+    _DJI_PROFILE[key] = res
+    return res
+
+def _dji_model(info):
+    """"DJI OsmoAction5 Pro" → "action5pro", "DJI OsmoPocket4P" → "pocket4p" (the keys of DJI_LOG_LUTS)."""
+    return re.sub(r"^dji|osmo|[\s_-]", "", (info.get("camera") or "").lower())
+
 def lut_for(path, lut=None, lut_map=None, info=None):
     """(cube path or None, reason). Order: --lut-map glob → an HDR source (HLG / PQ, any file: iPhone, Android HDR10, a camera
-    in HLG mode) gets the HDR → Rec.709 LUT (hdr_lut.py) → non-camera files get none → explicit --lut / draft LUT →
-    none: Rec.709 is assumed — log footage (D-Log, S-Log, V-Log …) needs --lut or --lut-map (ask the user when the inventory
-    shows flat grey footage)."""
+    in HLG mode) gets the HDR → Rec.709 LUT (hdr_lut.py) → non-camera files get none → the DJI colour profile recorded in the
+    file (djmd: Normal → none, HLG → the HDR LUT, D-Log / D-Log M → that camera's cube when it is installed, else --lut, else
+    reported) → explicit --lut / draft LUT → none: Rec.709 is assumed — other log footage (S-Log, V-Log …) needs --lut or
+    --lut-map (ask the user when the inventory shows flat grey footage). Reasons starting with "lut-map" or "djmd" are decisions."""
     b = nfc(os.path.basename(path))
     for pat, cube in (lut_map or {}).items():
         if fnmatch.fnmatch(b, pat) or fnmatch.fnmatch(nfc(path), pat) or fnmatch.fnmatch(nfc(os.path.basename(os.path.realpath(path))), pat):   # alias symlinks match as their source
@@ -59,6 +144,16 @@ def lut_for(path, lut=None, lut_map=None, info=None):
     info = info if info and "hdr" in info else probe(path)
     if info.get("hdr"): return hdr_lut(info["hdr"]), f"HDR {info['hdr'].upper()} ({info.get('transfer')}) → Rec.709"
     if not is_camera(path): return None, "not a camera clip (Rec.709)"
+    prof = dji_profile(path)
+    if prof:
+        model = _dji_model(info)
+        if prof == "Normal": return None, f"djmd: {info.get('camera') or 'DJI'} Normal (Rec.709)"
+        if prof == "HLG": return hdr_lut("hlg"), f"djmd: {info.get('camera') or 'DJI'} HLG → Rec.709"
+        name = DJI_LOG_LUTS.get((model, prof))
+        p = find_cube(name) if name else None
+        if p: return p, f"djmd: {info.get('camera')} {prof}"
+        if lut: return os.path.expanduser(lut), f"--lut / draft ({info.get('camera')} {prof}: no cube of its own)"
+        return None, f"NO LUT FOUND for {info.get('camera') or 'DJI'} {prof}" + (f" (missing {name})" if name else "") + " — pass --lut or --lut-map"
     if lut: return os.path.expanduser(lut), "--lut / draft"
     return None, "no LUT (Rec.709 assumed" + (f", camera tag '{info.get('camera')}'" if info.get("camera") else "") + ")"
 

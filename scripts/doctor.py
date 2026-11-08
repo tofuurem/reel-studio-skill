@@ -71,7 +71,8 @@ else:
     for s in cl["sources"]:
         if is_camera(s) and os.path.exists(s):
             lut, why = lut_for(s, next((p for p in cl.get("luts", {}).values() if p), None))
-            if not lut and looks_log(s): add("WARN", "cutlist", f"no LUT for {os.path.basename(s)} — fine for Normal / Rec.709 footage; D-Log needs make_proxies --lut / --lut-map")
+            if not lut and why.startswith("NO LUT FOUND"): add("ERR", "cutlist", f"{os.path.basename(s)}: {why}")
+            elif not lut and looks_log(s) and not why.startswith("djmd"): add("WARN", "cutlist", f"no LUT for {os.path.basename(s)} — fine for Normal / Rec.709 footage; D-Log needs make_proxies --lut / --lut-map")
 
 # ---------------------------------------------------------------- crop (people-aware 9:16 crop of landscape camera clips)
 zones = load_json(pj("work/people_zones.json"), {}) or {}; crop_srcs = set()
@@ -174,6 +175,8 @@ if os.path.isdir(src_dir):
     for f in glob.glob(os.path.join(src_dir, "**/*.ts*"), recursive=True):
         if os.path.basename(f) in (TALK if ACTION else ACT): continue
         t = open(f, encoding="utf-8").read()
+        # comments are no references: blocks/BeforeAfter.tsx documents «"screens/old.png"» and stopped every render (Halloween v4)
+        t = re.sub(r"(?m)^\s*//[^\n]*|\s//\s[^\n]*", "", re.sub(r"/\*.*?\*/", "", t, flags=re.S))
         found = set(re.findall(r"""staticFile\(\s*["'`]([^"'`$]+)["'`]\s*\)""", t))
         found |= {r for r in re.findall(r"""["'`]((?:footage|screens|audio|captions|covers|fonts)/[^"'`$\s]+\.\w{2,5})["'`]""", t)}
         if os.path.basename(f) == "Sfx.tsx" and "<MusicBed" not in reel_src:   # the bed's default path is no reference when the reel has no MusicBed (music: none)

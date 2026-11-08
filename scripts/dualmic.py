@@ -10,6 +10,7 @@ dualmicAtten dB (full strength sounded hollow) → a Dugan-style automix per 10 
 smoothed power ^ (dualmicHard / 2), so whoever speaks into their own mic wins. A dead channel (digital silence) is skipped;
 a mono file or two identical channels (one mic on both) go through the same chain once.
 --cutlist cleans only the source ranges the cut list uses (± --pad s), zeros elsewhere — a 9-minute take is not read whole.
+Alias clips (<id>x<k>, symlinks to the same take) get a link to the take's voice instead of a second cleaning.
 Output: work/voice/out/<clipId>_DeepFilterNet3.wav (48 kHz mono float, full clip length) — what dialogue.py and
 make_proxies --voice-dir read. Re-runs skip finished clips unless the windows changed (work/voice/out/.dualmic.json).
 Prints DUALMIC_DONE.
@@ -122,11 +123,21 @@ def main():
     if a.cutlist and not cl: sys.exit(f"no cut list at {a.cutlist}")
     outdir = os.path.join(P, "work/voice/out"); os.makedirs(outdir, exist_ok=True)
     state_p = os.path.join(outdir, ".dualmic.json"); state = load_json(state_p, {}) or {}
+    first = {}   # realpath → the target of the first clip id seen for that file
     for src in a.sources:
         cid = clip_id(src); target = os.path.join(outdir, f"{cid}_DeepFilterNet3.wav"); dur = duration(src)
         rs = windows(cl, src, a.pad, dur) if cl else None
         if cl and not rs: print("skip", cid, "(no speaking segment in the cut list)"); continue
-        sig = {"windows": rs, "atten": N["dualmicAtten"], "hard": N["dualmicHard"]}
+        sig = json.loads(json.dumps({"windows": rs, "atten": N["dualmicAtten"], "hard": N["dualmicHard"]}))   # as stored: tuples come back as lists, and a tuple never equalled the saved list — every re-run cleaned every clip again
+        rp = os.path.realpath(src)
+        if rp in first and first[rp] != target:
+            # an alias clip (<id>x<k>: a symlink to the same take, own proxy window) — windows() already covers every range
+            # of the take, so it gets a link to the voice just made instead of a second identical cleaning (Halloween v4:
+            # 90 sources were 51 takes; every alias re-cleaned all windows of its take)
+            if os.path.lexists(target): os.remove(target)
+            os.symlink(os.path.basename(first[rp]), target); state[cid] = sig; atomic_json(state, state_p)
+            print("link", cid, "→", os.path.basename(first[rp]), flush=True); continue
+        first[rp] = target
         if os.path.exists(target) and state.get(cid) == sig: print("skip", cid, "(done)"); continue
         if os.path.exists(target) and cid not in state and not cl: print("skip", cid, "(done)"); continue
         with tempfile.TemporaryDirectory(dir=os.path.join(P, "work/tmp")) as tmp:

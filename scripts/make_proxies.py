@@ -14,8 +14,9 @@ Usage:
   segment a centre or a pan, written into the proxy as one piecewise-linear ffmpeg crop over the window. Without zones for
   every such segment the run stops before encoding (a centre crop loses whoever stands at the edge); --centre-crop accepts
   the old centre crop on purpose. The keyframes are in the manifest («crop»), so a changed crop re-encodes that clip.
-- LUT (log → Rec.709) is burned into camera clips only, and only when one is known: per clip via common.lut_for — --lut-map glob, then --lut or the
-  draft's LUT; otherwise none (Rec.709 assumed). Chrome cannot colour-manage log footage.
+- LUT (log → Rec.709) is burned into camera clips only, and only when one is known: per clip via common.lut_for — --lut-map glob, then
+  the DJI colour profile recorded in the file (djmd: Normal → none, D-Log / D-Log M → that camera's cube if installed), then --lut
+  or the draft's LUT; otherwise none (Rec.709 assumed). Chrome cannot colour-manage log footage.
   An HDR source (HLG / PQ — iPhone «HDR video», Android HDR10, a camera in HLG mode; any kind) gets the HDR → Rec.709 LUT from
   hdr_lut.py instead (fitted to Apple's own conversion): tagged bt709 without it, HLG looks grey, flat and pale.
 - `-map 0:v:0` because DJI files carry a second (preview) video stream that breaks muxing.
@@ -27,6 +28,7 @@ Usage:
 - Each folder keeps `.manifest.json` {clipId: {src, start, end, voice, voice_mtime, lut, crf, res, kind, speed, crop}}: a proxy is
   re-encoded when ANY of it changed (a window that grew or moved, voice file, LUT, CRF) or its duration does not match — not only
   when the window start moved (audit 2026-10-22: a longer window, a new --voice-dir, a 1080-only re-run all used to be skipped).
+  When ONLY the voice changed (a dualmic / voice_clean re-run), the video stream is copied and the new voice remuxed (REMUX).
   A window that only SHRANK inside the old one keeps the proxies (and the old offset) in both folders.
 - Writes go to work/tmp first and are verified (ffprobe duration) before they replace the proxy: no half files in public/.
 - Missing sources (volume not mounted) end the run with exit 1 after the rest is done (--allow-missing to accept).
@@ -77,6 +79,8 @@ def same(o, n):
     diff = []
     for k in ("src", "start", "end", "voice", "voice_mtime", "lut", "crf", "res", "kind", "crop"):
         x, y = o.get(k), n.get(k)
+        if k in ("src", "voice") and x and y and x != y and os.path.basename(x) == os.path.basename(y) and not os.path.exists(x):
+            continue   # the project (or the volume) moved: same file name, the old path is gone — not a new source (Halloween v4: an archived project re-encoded everything)
         if isinstance(x, float) or isinstance(y, float):
             if x is None or y is None or abs(float(x) - float(y)) > 0.01: diff.append(f"{k} {x}→{y}")
         elif x != y:
@@ -104,7 +108,7 @@ for src in srcs:
         rng = (max(0.0, min(s["srcStart"] for s in segs) - a.trim_to_cutlist), min(info["dur"] or 1e9, max(s["srcStart"] + src_dur(s) for s in segs) + a.trim_to_cutlist))
     else: rng = None
     lut, why = (None, "--no-lut") if a.no_lut else lut_for(src, draft_lut, lut_map, info)
-    if looks_log(src) and not lut and not a.no_lut and not why.startswith("lut-map"): nolut.append(src)  # an explicit "none" in --lut-map is a decision, not a miss
+    if looks_log(src) and not lut and not a.no_lut and not why.startswith(("lut-map", "djmd: ")): nolut.append(src)  # an explicit "none" in --lut-map or a Normal profile in the file is a decision, not a miss
     voice = os.path.join(a.voice_dir, f"{cid}_DeepFilterNet3.wav") if a.voice_dir and not broll else None
     if voice and not os.path.exists(voice): voice = None
     if not a.centre_crop and not broll and any(needs_crop(cl, s, info) for s in segs):
@@ -149,7 +153,7 @@ def inside(cid, entry):
     olds = [manifests[r].get(cid) for r in targets]
     if a.force or not all(olds) or any(not os.path.exists(os.path.join(a.public, RES[r][0], cid + ".mp4")) for r in targets): return None
     for o in olds:
-        if [d for d in same(o, dict(entry, res=o.get("res"))) if not d.startswith(("start ", "end "))]: return None
+        if [d for d in same(o, dict(entry, res=o.get("res"))) if not d.startswith(("start ", "end ", "voice ", "voice_mtime "))]: return None   # a new voice alone is remuxed below
         if o["start"] > entry["start"] + 0.01 or o["end"] < entry["end"] - 0.01: return None
     if len({(o["start"], o["end"]) for o in olds}) > 1: return None
     return olds[0]["start"], olds[0]["end"]
@@ -169,6 +173,16 @@ for src, cid, info, rng, entry, why in plan:
             got, want = duration(out), (e["end"] - e["start"]) / (1.001 if entry["kind"] == "broll" and ntsc_rate(info["fps"]) else 1)
             if abs(got - want) > max(0.6, want * 0.002): diff = [f"duration {got:.2f} s ≠ window {want:.2f} s"]
         if not diff and os.path.exists(out): print(f"ok {cid} {r} (manifest matches)"); continue
+        if diff and e["voice"] and os.path.exists(out) and all(d.startswith(("voice ", "voice_mtime ")) for d in diff):
+            # only the restored voice changed (dualmic / voice_clean re-run): copy the video stream, remux the new voice —
+            # Halloween v4: a new voice chain would otherwise re-encode 40 min of 4K (≈ 2 h) for a picture that did not change
+            tmp = tmp_for(out, TMP); want = e["end"] - e["start"]
+            rc = ffmpeg(["-loglevel", "error", "-i", out, "-ss", f"{e['start']:.3f}", "-to", f"{e['end']:.3f}", "-i", e["voice"], "-map", "0:v:0", "-c:v", "copy",
+                         "-map", "1:a", "-c:a", "aac", "-b:a", "192k", "-ar", "48000", "-shortest", "-movflags", "+faststart", tmp])
+            ok, msg = commit(tmp, out, want, max(0.6, want * 0.002)) if rc == 0 else (False, f"{cid} {r}: remux exit {rc}")
+            if ok:
+                print(f"REMUX {cid} {r}: new voice, video copied"); manifests[r][cid] = e; atomic_json(manifests[r], man_paths[r]); continue
+            _rm(tmp); print(f"remux failed ({msg}) — re-encoding")
         if os.path.exists(out): print(f"RE-ENCODE {cid} {r}: {', '.join(diff)}")
         todo.append((r, W, H, out, e))
     if not todo: continue
