@@ -29,6 +29,9 @@ rounds of feedback). It is the raw-takes entry (`inputs/raw-takes.md`) with thes
 4. **Voice.** `dualmic.py --cutlist` restores each lav clip (proxies take `--voice-dir work/voice/out`); after the timeline,
    `work/dfvenv/bin/python -I $S/dialogue.py <project>` builds the vlog's one dialogue stem: per-clip level, per-segment
    leveling, camera sound under `amb` beats, crossfaded cuts, room tone, one chain (`craft/audio.md`). Re-run after every re-cut.
+   Scene changes: `--bridge` (or `"bridge": true` on the 3–5 hardest ones) lets each place's own sound run a moment across the
+   cut (J/L, `craft/transitions.md` §2). Seams between places: mostly dissolves; one `leak`, a `match` when the same person is
+   in two places, a `bodywipe` when someone crosses close to the camera — within the seam budget (`transitions.md` §0).
 5. **Night.** After the proxies: `python3 -I $S/night_lift.py <project>` lifts the shadows of dark clips (per clip, by mean
    luma); re-run after make_proxies re-encodes one (doctor warns).
 6. **Graphics**: chapter tags and a title, few cards — the people and the event are the content. A title behind a person

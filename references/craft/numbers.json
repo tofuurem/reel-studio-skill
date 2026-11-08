@@ -904,6 +904,249 @@
      "used": "motion-design.md «Seams»"
     }
    ]
+  },
+  {
+   "title": "Seams",
+   "rows": [
+    {
+     "key": "seamFxPerMin",
+     "value": 3,
+     "what": "effect seams (anything but a dissolve / hard cut) per minute of a calm reel, at most",
+     "why": "the user, 2026-11-09: «вжух на каждое действие» makes a terrible video — most cuts stay plain",
+     "used": "gen_timeline.py budget check, transitions.md"
+    },
+    {
+     "key": "seamFxGapCuts",
+     "value": 3,
+     "what": "plain cuts between two effect seams, at least (calm reel)",
+     "why": "alternation: an effect only reads against plain cuts around it",
+     "used": "gen_timeline.py budget check"
+    },
+    {
+     "key": "seamFxGapShots",
+     "value": 4,
+     "what": "plain shots between two effect moments in an action reel (whip, crash, rgb, stutter, bump), at least — the drop and phrase starts excepted",
+     "why": "same rule at action tempo",
+     "used": "actiongen.py budget check"
+    },
+    {
+     "key": "seamRepeatSec",
+     "value": 20,
+     "what": "the same seam kind does not come back within this many seconds",
+     "why": "a repeated trick turns into a template",
+     "used": "gen_timeline.py, actiongen.py"
+    },
+    {
+     "key": "seamPushOut",
+     "value": 8,
+     "what": "push seam: frames the outgoing clip accelerates into the zoom before the cut",
+     "why": "video-shotcraft crash-zoom card: over 10 f it reads as an ordinary push",
+     "used": "Clip.tsx"
+    },
+    {
+     "key": "seamPushScale",
+     "value": 1.16,
+     "what": "push seam: outgoing scale multiplier at the cut",
+     "why": "enough to read as a move, the zoom blur hides the jump",
+     "used": "Clip.tsx"
+    },
+    {
+     "key": "seamPushIn",
+     "value": 12,
+     "what": "push seam: frames the incoming clip keeps pushing in while the blur clears",
+     "why": "the camera keeps the same direction across the cut (motion-design.md «sign of a zoom»)",
+     "used": "Clip.tsx"
+    },
+    {
+     "key": "seamPushGrow",
+     "value": 0.05,
+     "what": "push seam: incoming scale growth over seamPushIn",
+     "why": "forward momentum that settles",
+     "used": "Clip.tsx"
+    },
+    {
+     "key": "seamPushBlur",
+     "value": 44,
+     "what": "push seam: radial zoom blur at the cut (px, @remotion/effects zoomBlur)",
+     "why": "tested on a 2K proxy 2026-11-09: 40–50 hides the cut, 70+ smears the face",
+     "used": "Clip.tsx"
+    },
+    {
+     "key": "seamBlurOut",
+     "value": 8,
+     "what": "blur seam: frames the outgoing clip defocuses before the cut",
+     "why": "motionmaxxing blur-matched cut: 3–8 f ramp",
+     "used": "Clip.tsx"
+    },
+    {
+     "key": "seamBlurIn",
+     "value": 9,
+     "what": "blur seam: frames the incoming clip resolves",
+     "why": "≈ 8 f",
+     "used": "Clip.tsx"
+    },
+    {
+     "key": "seamBlurPx",
+     "value": 18,
+     "what": "blur seam: defocus at the cut (px on the 1080 canvas)",
+     "why": "both sides meet at the same blur",
+     "used": "Clip.tsx"
+    },
+    {
+     "key": "seamLeakOut",
+     "value": 22,
+     "what": "leak seam: frames the warm light builds before the cut (ease-in)",
+     "why": "hidden cut through a light leak, slower in than out",
+     "used": "Clip.tsx"
+    },
+    {
+     "key": "seamLeakIn",
+     "value": 34,
+     "what": "leak seam: frames the light clears after the cut (ease-out)",
+     "why": "",
+     "used": "Clip.tsx"
+    },
+    {
+     "key": "seamLeakPeak",
+     "value": 0.5,
+     "what": "leak seam: peak opacity of the warm gradients",
+     "why": "the user: no super-bright transitions — @remotion/effects lightLeak fills the frame solid yellow at its peak, not used",
+     "used": "Clip.tsx"
+    },
+    {
+     "key": "seamLeakLift",
+     "value": 0.3,
+     "what": "leak seam: brightness lift of the picture at the peak",
+     "why": "with contrast −20 %, saturation −15 % it reads as light, not a white flash",
+     "used": "Clip.tsx"
+    },
+    {
+     "key": "seamWipeFrames",
+     "value": 14,
+     "what": "wipe seam: frames of a soft wipe in the reel's current (right → left)",
+     "why": "",
+     "used": "Clip.tsx, seams.py"
+    },
+    {
+     "key": "seamWipeFeather",
+     "value": 0.16,
+     "what": "wipe seam: soft edge width (share of the canvas width)",
+     "why": "a hard edge looks like a slideshow",
+     "used": "Clip.tsx"
+    },
+    {
+     "key": "seamMatchFrames",
+     "value": 18,
+     "what": "match seam: frames the incoming clip eases from the matched framing back to its own",
+     "why": "the head lands where the previous head was, then the frame settles",
+     "used": "Clip.tsx, seams.py"
+    },
+    {
+     "key": "seamMatchMaxScale",
+     "value": 1.45,
+     "what": "match seam: largest zoom used to line the heads up (beyond it → a plain dissolve, WARNING)",
+     "why": "2K proxies soften beyond ≈ 1.5",
+     "used": "seams.py"
+    },
+    {
+     "key": "shakePx",
+     "value": 15,
+     "what": "action shake amplitude at the hit (px)",
+     "why": "video-shotcraft: > 20 px reads as a glitch; was 22 px linear",
+     "used": "Action.tsx"
+    },
+    {
+     "key": "shakeTau",
+     "value": 1.8,
+     "what": "action shake decay constant (frames, e^(−t/τ)); gone in ≈ 6 f",
+     "why": "",
+     "used": "Action.tsx"
+    },
+    {
+     "key": "rgbPx",
+     "value": 10,
+     "what": "action RGB split at its peak (px on the 1080 canvas)",
+     "why": "short and on a hit only; a constant split reads as a broken screen",
+     "used": "Action.tsx"
+    },
+    {
+     "key": "rgbFrames",
+     "value": 4,
+     "what": "action RGB split length (frames)",
+     "why": "",
+     "used": "Action.tsx"
+    },
+    {
+     "key": "rgbMax",
+     "value": 2,
+     "what": "RGB splits per reel, at most",
+     "why": "",
+     "used": "actiongen.py budget check"
+    },
+    {
+     "key": "bumpScale",
+     "value": 0.05,
+     "what": "bump cut: the shot pushes in by this much over bumpFrames on the beat",
+     "why": "Remotion pushCut idea: a hard cut with a scale pulse",
+     "used": "Action.tsx"
+    },
+    {
+     "key": "bumpFrames",
+     "value": 7,
+     "what": "bump cut length (frames)",
+     "why": "",
+     "used": "Action.tsx"
+    },
+    {
+     "key": "bumpFlash",
+     "value": 0.18,
+     "what": "bump cut: white flash peak (2 frames); 0 = none",
+     "why": "≤ 0.2: a hint, not a strobe",
+     "used": "Action.tsx"
+    },
+    {
+     "key": "crashMax",
+     "value": 2,
+     "what": "crash zooms per reel, at most",
+     "why": "",
+     "used": "actiongen.py budget check"
+    },
+    {
+     "key": "impactMax",
+     "value": 3,
+     "what": "full-frame impacts (flash ≥ 0.3 or shake) per reel, at most",
+     "why": "video-shotcraft beat-sync: 3 hits, ≥ 16 beats apart",
+     "used": "actiongen.py budget check"
+    },
+    {
+     "key": "impactGapBeats",
+     "value": 16,
+     "what": "beats between two full-frame impacts, at least",
+     "why": "",
+     "used": "actiongen.py budget check"
+    },
+    {
+     "key": "stutterStep",
+     "value": 3,
+     "what": "stutter into a drop: the picture advances every N frames",
+     "why": "each step must move visibly or it reads as dropped frames",
+     "used": "Action.tsx"
+    },
+    {
+     "key": "bridgeTail",
+     "value": 0.8,
+     "what": "L-cut: seconds the outgoing scene's own sound carries under the next picture (scene changes, bridge option)",
+     "why": "OpenMontage edit-director: 0.5–1.5 s on the hardest seams",
+     "used": "dialogue.py"
+    },
+    {
+     "key": "bridgeLead",
+     "value": 0.4,
+     "what": "J-cut: seconds the incoming scene's own sound starts before its picture",
+     "why": "",
+     "used": "dialogue.py"
+    }
+   ]
   }
  ]
 }

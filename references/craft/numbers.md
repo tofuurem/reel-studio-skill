@@ -173,3 +173,42 @@ Generated from `numbers.json` by `scripts/numbers_gen.py` — edit the JSON, not
 | `payoffPauseMin` | 9 | shortest still beat between an action and its result (frames) | the dramatic comma: count-up ends → hold → the stamp lands; straight to the result loses it | motion-design.md «Seams» |
 | `payoffPauseMax` | 22 | longest still beat before a payoff (frames) | longer reads as a stall | motion-design.md «Seams» |
 | `transitionKindsMax` | 3 | kinds of scene transition in one reel (dissolve, hand-off, whip …), repeated | a new transition per chapter reads as a template showcase | motion-design.md «Seams» |
+
+**Seams**
+
+| key | value | what | why | used by |
+|---|---|---|---|---|
+| `seamFxPerMin` | 3 | effect seams (anything but a dissolve / hard cut) per minute of a calm reel, at most | the user, 2026-11-09: «вжух на каждое действие» makes a terrible video — most cuts stay plain | gen_timeline.py budget check, transitions.md |
+| `seamFxGapCuts` | 3 | plain cuts between two effect seams, at least (calm reel) | alternation: an effect only reads against plain cuts around it | gen_timeline.py budget check |
+| `seamFxGapShots` | 4 | plain shots between two effect moments in an action reel (whip, crash, rgb, stutter, bump), at least — the drop and phrase starts excepted | same rule at action tempo | actiongen.py budget check |
+| `seamRepeatSec` | 20 | the same seam kind does not come back within this many seconds | a repeated trick turns into a template | gen_timeline.py, actiongen.py |
+| `seamPushOut` | 8 | push seam: frames the outgoing clip accelerates into the zoom before the cut | video-shotcraft crash-zoom card: over 10 f it reads as an ordinary push | Clip.tsx |
+| `seamPushScale` | 1.16 | push seam: outgoing scale multiplier at the cut | enough to read as a move, the zoom blur hides the jump | Clip.tsx |
+| `seamPushIn` | 12 | push seam: frames the incoming clip keeps pushing in while the blur clears | the camera keeps the same direction across the cut (motion-design.md «sign of a zoom») | Clip.tsx |
+| `seamPushGrow` | 0.05 | push seam: incoming scale growth over seamPushIn | forward momentum that settles | Clip.tsx |
+| `seamPushBlur` | 44 | push seam: radial zoom blur at the cut (px, @remotion/effects zoomBlur) | tested on a 2K proxy 2026-11-09: 40–50 hides the cut, 70+ smears the face | Clip.tsx |
+| `seamBlurOut` | 8 | blur seam: frames the outgoing clip defocuses before the cut | motionmaxxing blur-matched cut: 3–8 f ramp | Clip.tsx |
+| `seamBlurIn` | 9 | blur seam: frames the incoming clip resolves | ≈ 8 f | Clip.tsx |
+| `seamBlurPx` | 18 | blur seam: defocus at the cut (px on the 1080 canvas) | both sides meet at the same blur | Clip.tsx |
+| `seamLeakOut` | 22 | leak seam: frames the warm light builds before the cut (ease-in) | hidden cut through a light leak, slower in than out | Clip.tsx |
+| `seamLeakIn` | 34 | leak seam: frames the light clears after the cut (ease-out) |  | Clip.tsx |
+| `seamLeakPeak` | 0.5 | leak seam: peak opacity of the warm gradients | the user: no super-bright transitions — @remotion/effects lightLeak fills the frame solid yellow at its peak, not used | Clip.tsx |
+| `seamLeakLift` | 0.3 | leak seam: brightness lift of the picture at the peak | with contrast −20 %, saturation −15 % it reads as light, not a white flash | Clip.tsx |
+| `seamWipeFrames` | 14 | wipe seam: frames of a soft wipe in the reel's current (right → left) |  | Clip.tsx, seams.py |
+| `seamWipeFeather` | 0.16 | wipe seam: soft edge width (share of the canvas width) | a hard edge looks like a slideshow | Clip.tsx |
+| `seamMatchFrames` | 18 | match seam: frames the incoming clip eases from the matched framing back to its own | the head lands where the previous head was, then the frame settles | Clip.tsx, seams.py |
+| `seamMatchMaxScale` | 1.45 | match seam: largest zoom used to line the heads up (beyond it → a plain dissolve, WARNING) | 2K proxies soften beyond ≈ 1.5 | seams.py |
+| `shakePx` | 15 | action shake amplitude at the hit (px) | video-shotcraft: > 20 px reads as a glitch; was 22 px linear | Action.tsx |
+| `shakeTau` | 1.8 | action shake decay constant (frames, e^(−t/τ)); gone in ≈ 6 f |  | Action.tsx |
+| `rgbPx` | 10 | action RGB split at its peak (px on the 1080 canvas) | short and on a hit only; a constant split reads as a broken screen | Action.tsx |
+| `rgbFrames` | 4 | action RGB split length (frames) |  | Action.tsx |
+| `rgbMax` | 2 | RGB splits per reel, at most |  | actiongen.py budget check |
+| `bumpScale` | 0.05 | bump cut: the shot pushes in by this much over bumpFrames on the beat | Remotion pushCut idea: a hard cut with a scale pulse | Action.tsx |
+| `bumpFrames` | 7 | bump cut length (frames) |  | Action.tsx |
+| `bumpFlash` | 0.18 | bump cut: white flash peak (2 frames); 0 = none | ≤ 0.2: a hint, not a strobe | Action.tsx |
+| `crashMax` | 2 | crash zooms per reel, at most |  | actiongen.py budget check |
+| `impactMax` | 3 | full-frame impacts (flash ≥ 0.3 or shake) per reel, at most | video-shotcraft beat-sync: 3 hits, ≥ 16 beats apart | actiongen.py budget check |
+| `impactGapBeats` | 16 | beats between two full-frame impacts, at least |  | actiongen.py budget check |
+| `stutterStep` | 3 | stutter into a drop: the picture advances every N frames | each step must move visibly or it reads as dropped frames | Action.tsx |
+| `bridgeTail` | 0.8 | L-cut: seconds the outgoing scene's own sound carries under the next picture (scene changes, bridge option) | OpenMontage edit-director: 0.5–1.5 s on the hardest seams | dialogue.py |
+| `bridgeLead` | 0.4 | J-cut: seconds the incoming scene's own sound starts before its picture |  | dialogue.py |

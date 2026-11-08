@@ -27,6 +27,9 @@ shots = [
     R.shot("0122b", 78.0, beats=1.5, x=0.8, note="второй друг согнулся", shake=True, shakeAt=0),   # beats= snaps back onto the grid
     # talk punchlines: the cleaned voice of the line + one caption, censored wording
     R.shot("0091", 25.9, frames=62, x=0.41, voice=(25.9, 27.7), note="«и просто стоит фоткает»", caption="…и просто стоит фоткает", captionAt=3),
+    # accents (craft/transitions.md §3) are rare and alternate with plain shots — FX BUDGET lines say when they crowd:
+    #   bump=True on a strong beat, crashAt=f + punch=[1, 1.25] on a reaction, rgbAt=f on a hit, stutterUntil=<drop frame>,
+    #   black=6 after a 3 × 9-frame cold-open bumper, hold=50 + circle="auto" for «вот он»
     # phrase starts get the rare silent whips; the battery gag counts the night down
     R.shot("0125b", [P(15.0, None, 1.6)], beats=2, x=0.6, note="банан на мотоцикле в фарах", whip="left", battery=19),
     R.shot("0115", 113.5, beats=1, x=0.6, note="морда банана в 7-Eleven", battery=9, sfx=[(3, "beep")]),

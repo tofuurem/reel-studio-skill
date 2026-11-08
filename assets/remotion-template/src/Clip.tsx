@@ -5,8 +5,8 @@ import { DIALOGUE } from "./dialogueSrc";
 import { N } from "./numbers";
 import { H, W, footagePath } from "./theme";
 import { useDirBlur } from "./ui/DirBlur";
-
-type Transition = "dissolve" | "whip";
+import { zoomBlur } from "@remotion/effects/zoom-blur";
+import { LeakLight, NO_LOOK, enterLook, exitLook, leakFilter, mergeLooks, type MatchStart, type SeamKind, type WipePath } from "./ui/Seam";
 
 /** The user's CapCut framing of a clip (cutlist "transform"): scale about the clip centre, then the centre moves by
  *  x / y half-canvas units (y points UP, as in CapCut), rotation in degrees clockwise, optional horizontal flip.
@@ -27,12 +27,16 @@ type Props = {
   origin?: string;
   /** Real length of the cut; frames after it are the overlap under the next clip (video held, audio muted). */
   hold?: number;
-  /** How this clip comes in over the previous one, over `enterFrames`. */
-  enter?: Transition;
+  /** How this clip comes in over the previous one (ui/Seam.tsx; references/craft/transitions.md), over `enterFrames`. */
+  enter?: SeamKind;
   enterFrames?: number;
-  /** How this clip leaves during its overlap tail (only "whip" animates; a dissolve is done by the next clip). */
-  exit?: "none" | "whip";
+  /** The seam into the NEXT clip: whip animates the overlap tail; push / blur / leak shape the last frames before the cut. */
+  exit?: "none" | SeamKind;
   exitFrames?: number;
+  /** enter="match": where the head is and how far / how much to move it so it lands on the previous head (seams.py). */
+  match?: MatchStart;
+  /** enter="bodywipe": the passing person's trailing edge per frame (seams.py). */
+  wipe?: WipePath;
   /** Ramp the sound over N frames (used when a cut lands inside a word). */
   audioFadeIn?: number;
   /** CapCut speed change (cutlist.speed) — forwarded to the video. */
@@ -63,7 +67,8 @@ const easeIn = Easing.in(Easing.cubic);
 /**
  * One talking-head take. The slow drift and optional punch-in are the
  * "reels" rhythm: every cut lands on a slightly different framing.
- * Cuts overlap by a few frames: the incoming clip dissolves (or whips) in over the held outgoing one.
+ * Cuts overlap by a few frames: the incoming clip dissolves (or whips) in over the held outgoing one. Other seams (push, blur,
+ * leak, wipe, bodywipe, match, cut) come from ui/Seam.tsx — rare by design (references/craft/transitions.md, seam budget).
  */
 export const Clip: React.FC<Props> = ({
   src,
@@ -77,6 +82,8 @@ export const Clip: React.FC<Props> = ({
   enterFrames = N.xfade,
   exit = "none",
   exitFrames = N.xfade,
+  match,
+  wipe,
   audioFadeIn = 0,
   playbackRate = 1,
   framing,
@@ -100,8 +107,13 @@ export const Clip: React.FC<Props> = ({
 
   const inP = enter ? interpolate(frame, [0, Math.max(1, enterFrames)], [0, 1], { extrapolateLeft: "clamp", extrapolateRight: "clamp", easing: easeOut }) : 1;
   const outP = exit === "whip" ? interpolate(frame, [realLen, realLen + Math.max(1, exitFrames)], [0, 1], { extrapolateLeft: "clamp", extrapolateRight: "clamp", easing: easeIn }) : 0;
+  // every other seam: ui/Seam.tsx says how the clip looks right after its cut-in and right before its cut-out
+  const look = mergeLooks(enter && enter !== "whip" ? enterLook(enter, frame, enterFrames, match, wipe) : NO_LOOK, exit !== "none" && exit !== "whip" ? exitLook(exit, frame, realLen) : NO_LOOK);
+  // the leak's light drifts across the cut as one sweep: u runs over the outgoing tail and on through the incoming head
+  const leakU = exit === "leak" && frame <= realLen ? interpolate(frame, [realLen - N.seamLeakOut, realLen], [0, 0.4], { extrapolateLeft: "clamp", extrapolateRight: "clamp" })
+    : interpolate(frame, [0, N.seamLeakIn], [0.4, 1], { extrapolateLeft: "clamp", extrapolateRight: "clamp" });
 
-  const opacity = enter === "dissolve" ? inP : 1;
+  const opacity = (enter === "whip" ? 1 : look.opacity);
   let translateX = 0;
   let blur = 0;
   if (enter === "whip") {
@@ -115,19 +127,28 @@ export const Clip: React.FC<Props> = ({
 
   // the whip streaks only along the move (an SVG filter): CSS blur() smeared in every direction and read as a defocus
   const dirBlur = useDirBlur(blur * 1.6, 0);
+  const filters = [dirBlur.filter, look.blur > 0.05 ? `blur(${look.blur.toFixed(2)}px)` : undefined, leakFilter(look.light)].filter(Boolean).join(" ") || undefined;
+  // the zoom blur is a WebGL effect on the video itself (@remotion/effects). A clip that has a push seam keeps the effect
+  // for its whole life, disabled between seams: an effect added mid-clip was never applied (the outgoing push stayed sharp)
+  const cy = Math.min(1, Math.max(0, N.punchCenterY / H));
+  const effects = enter === "push" || exit === "push" ? [zoomBlur({ amount: Math.max(1, look.zoomBlur), center: [0.5, cy], disabled: look.zoomBlur <= 0.5 })] : [];
   return (
     <AbsoluteFill
       style={{
         opacity,
         translate: `${translateX}% 0px`,
-        filter: dirBlur.filter,
+        filter: filters,
+        maskImage: look.mask,
+        WebkitMaskImage: look.mask,
       }}
     >
       {dirBlur.defs}
+      <AbsoluteFill style={look.matchStyle}>
       <AbsoluteFill
         style={{
           transformOrigin: origin,
           scale: String(
+            look.scale *
             interpolate(frame, [0, Math.max(1, realLen)], [punch, punch + drift], {
               extrapolateLeft: "clamp",
               extrapolateRight: "clamp",
@@ -152,15 +173,17 @@ export const Clip: React.FC<Props> = ({
               const g = cropGeometry(crop, srcW, srcH);
               return (
                 <div style={{ position: "absolute", ...g.box, overflow: "hidden" }}>
-                  <Video src={staticFile(footagePath(src))} trimBefore={trimBefore} volume={vol} muted={muted} playbackRate={playbackRate} style={{ position: "absolute", ...g.video }} />
+                  <Video src={staticFile(footagePath(src))} trimBefore={trimBefore} volume={vol} muted={muted} playbackRate={playbackRate} effects={effects} style={{ position: "absolute", ...g.video }} />
                 </div>
               );
             })()
           ) : (
-            <Video src={staticFile(footagePath(src))} trimBefore={trimBefore} volume={vol} muted={muted} playbackRate={playbackRate} objectFit={fit ?? (framing ? "contain" : "cover")} style={{ width: "100%", height: "100%" }} />
+            <Video src={staticFile(footagePath(src))} trimBefore={trimBefore} volume={vol} muted={muted} playbackRate={playbackRate} effects={effects} objectFit={fit ?? (framing ? "contain" : "cover")} style={{ width: "100%", height: "100%" }} />
           )}
         </AbsoluteFill>
       </AbsoluteFill>
+      </AbsoluteFill>
+      <LeakLight light={look.light} u={leakU} />
     </AbsoluteFill>
   );
 };

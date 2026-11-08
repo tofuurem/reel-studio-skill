@@ -50,7 +50,7 @@ if [ -n "$NMROOT" ]; then
 else
   [ -d node_modules ] || npmi
 fi
-PKGS=(remotion @remotion/cli @remotion/media @remotion/captions @remotion/fonts @remotion/bundler @remotion/renderer @remotion/eslint-config-flat)   # what the template imports + what render.sh / stills.mjs need
+PKGS=(remotion @remotion/cli @remotion/media @remotion/captions @remotion/fonts @remotion/effects @remotion/bundler @remotion/renderer @remotion/eslint-config-flat)   # what the template imports + what render.sh / stills.mjs need
 need=()
 for p in $PKGS; do v=$(node -p "try{require('./node_modules/$p/package.json').version}catch(e){''}" 2>/dev/null); [ "$v" = "$RV" ] || need+=("$p@$RV"); done
 if (( ${#need} )); then echo "installing ${need[*]}"; npmi --save-exact "${need[@]}"; fi

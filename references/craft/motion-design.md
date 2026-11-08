@@ -33,6 +33,8 @@ Routine boards (a list, a screenshot) do not need the full card.
 - Numbers count (`countUp`, ≈16–26 frames, ease-out), labels roll (`RollPill`), price tags and fact cards land flat with a spring (`PriceTag`, `FactCard`) — the only rotated element is a `Stamp`. Text never just appears where it could act.
 
 ## 5. Transitions
+- The catalogue of seams between shots (push, blur, leak, wipe, bodywipe, match, J/L sound bridges, action accents) and the
+  seam budget — most cuts plain, effects alternate with them — are in `transitions.md`. Here: scenes and boards.
 - Prefer a hand-off: the same object at the same place, or the new scene opening from an element of the old one. A plain board cross-fade (12 frames) is for unrelated scenes.
 - A whip or push only where the speaker changes place or topic; the user disliked harsh cuts — keep them rare.
 

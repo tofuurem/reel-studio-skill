@@ -23,6 +23,7 @@ Kit
 - `scenes/Motion.tsx` — advanced: Camera/Layer parallax, Figure, ScanSwap, RollPill, PriceTag, FactCard, Backdrop, GridFloor.
 - `ui/` — Card, ChapterTag, Chapter (flash + tag + whoosh), Flash, Fade (FadeFromBlack/FadeToBlack), Stamp, Mark,
   ChipRow/ChipBand, Chat (Bubble, ChatCard, TypingDots, Strike), Sfx/MusicBed, anim (inAt, outBefore, envelope, sp, steps…).
+- `ui/Seam.tsx` — the seams between timeline clips (push / blur / leak / wipe / bodywipe / match / cut; `Clip` reads them, `gen_timeline.py` writes them, `references/craft/transitions.md`); `ui/RgbSplit.tsx` — the short RGB split of an action accent (SVG filter, no blend modes). Rare by design: the seam budget.
 - `Cover.tsx` — CoverFrame, ArtCover, Cut, Badge, FloorShadow (stills; register them in Root.tsx).
 
 Blocks (`blocks/`, ready-made devlog beats; when and how: references/craft/blocks.md; preview: the `BlocksDemo` composition)

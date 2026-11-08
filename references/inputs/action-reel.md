@@ -32,9 +32,13 @@ straight from the camera files by `scripts/actiongen.py`, the template's `Action
    `sync=(frame, "drop")`, a speed ramp into it, flash ≤ 0.45, shake, `sfx=[(f, "hit")]`) → phrases of 4 bars, each opening on a
    new place or a whip → 2–4 spoken punchlines (`voice=(a, b)` + one caption, 2–3.5 s each, the funniest lines) → an end
    (the battery gag, a freeze, a fade). Mix wide/close, fast/slow; never two near-identical shots in a row.
+   Accents (`craft/transitions.md` §3): `bump`, `crashAt`, `rgbAt`, `stutterUntil` (into the drop), `black` (the cold-open
+   bumper), `hold` + `circle="auto"` — each on a real drum hit, with plain shots between them (`FX BUDGET` lines are errors:
+   the user hates «вжух на каждое действие»). Most cuts are plain hard cuts on the beat.
    Lengths in `beats=` (exact on the grid) or `frames=`; speed ramps as pieces (`R.piece(src_s, frames, speed)`).
 4. **Build.** `work/venv/bin/python -I work/gen_action.py` → `ACTION_OK`, the sync table (every cut's distance to the nearest beat, phrase
-   and DROP marks, `SYNC WARNING` when a `sync` moment misses) and `work/action/sheet.jpg` (the middle frame of every shot).
+   and DROP marks, `SYNC WARNING` when a `sync` moment misses or an accent is off the nearest drum hit, `FX BUDGET`, `STILL
+   CUTS` — cuts where neither side moves) and `work/action/sheet.jpg` (the middle frame of every shot).
    Read the sheet: a cut-off head, the wrong person, an empty frame → `x=…` for that shot, `--only N` to rebuild it.
    `(cd reel && npx tsc --noEmit -p .)`, `python3 -I $S/lint_reel.py <project>`.
 5. **Title behind the person** (optional, one per reel): `behind={"title": …, "kicker": …}` on a shot where one person is

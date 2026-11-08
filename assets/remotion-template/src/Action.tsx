@@ -6,6 +6,7 @@ import { N } from "./numbers";
 import { END_FRAMES, HOOK, SHOTS } from "./shotsData";
 import { colors, H, W } from "./theme";
 import { useDirBlur } from "./ui/DirBlur";
+import { useRgbSplit } from "./ui/RgbSplit";
 import { BehindTitle } from "./scenes/BehindTitle";
 import { sfxLevel } from "./ui/Sfx";
 
@@ -14,7 +15,10 @@ import { sfxLevel } from "./ui/Sfx";
  * adds the same track in Instagram from TRACK_START (ActionTrack previews it). Shots come from work/gen_action.py
  * (scripts/actiongen.py): each piece is already cropped to the people, graded and speed-ramped at 2K; here are only the
  * whips (silent, blurred along the move), punch-ins, shake, the hit flash, the freeze, captions, the title behind a person,
- * the camera-battery gag and the end.
+ * the camera-battery gag and the end. Accents (references/craft/transitions.md «Action accents»): bump (a push + a faint
+ * flash on the beat), crashAt (pull back, then a fast push that lands on the frame), rgbAt (a short RGB split on a hit),
+ * stutterUntil (the picture steps every stutterStep frames until the drop), black (pure black frames after the shot), circle
+ * (a hand-drawn marker loop over the freeze). They are accents: actiongen.py warns when they come back to back.
  */
 export type Piece = { file: string; frames: number; matte?: string };
 export type Shot = {
@@ -22,6 +26,8 @@ export type Shot = {
   whip?: "left" | "right"; punch?: [number, number]; punchAt?: number; flashAt?: number; shake?: boolean; shakeAt?: number;
   caption?: string; captionAt?: number; captionTail?: number; battery?: number; sfx?: [number, string][];
   behind?: { title: string; kicker?: string; at?: number; until?: number; y?: number; x?: number; scale?: number };
+  bump?: boolean; bumpAt?: number; crashAt?: number; rgbAt?: number; stutterUntil?: number; black?: number;
+  circle?: { cx: number; cy: number; r: number };
 };
 
 const clamp = { extrapolateLeft: "clamp", extrapolateRight: "clamp" } as const;
@@ -30,7 +36,7 @@ const PORTRAIT = H > W;
 
 export const START: number[] = [];
 let acc = 0;
-for (const s of SHOTS) { START.push(acc); acc += s.frames + (s.hold ?? 0); }
+for (const s of SHOTS) { START.push(acc); acc += s.frames + (s.hold ?? 0) + (s.black ?? 0); }
 const SHOTS_END = acc;
 export const ACTION_FRAMES = Math.max(1, SHOTS_END + END_FRAMES);
 
@@ -43,12 +49,22 @@ const ShotView: React.FC<{ s: Shot }> = ({ s }) => {
   const dir = s.whip === "left" ? -1 : 1;
   const blur = useDirBlur(w * 46, 0);
   let scale = 1;
-  if (s.punch) {
+  if (s.crashAt !== undefined) {
+    // crash zoom: a small pull back (the wind-up), then a fast ease-in push that lands ON crashAt and stops dead
+    const at = s.crashAt, [a0, a1] = s.punch ?? [1, 1.25];
+    if (f < at - 6) scale = interpolate(f, [at - 13, at - 6], [a0, a0 * 0.965], { ...clamp, easing: Easing.out(Easing.quad) });
+    else scale = interpolate(f, [at - 6, at, total], [a0 * 0.965, a1, a1 + 0.02], { ...clamp, easing: Easing.in(Easing.cubic) });
+  } else if (s.punch) {
     const at = s.punchAt ?? 0;
     scale = interpolate(f, [at, at + 6, total], [s.punch[0], s.punch[1], s.punch[1] + 0.03], { ...clamp, easing: Easing.out(Easing.quad) });
   } else scale = interpolate(f, [0, total], [1.0, 1.04], clamp); // every shot drifts in a little: nothing sits still
-  const sh = s.shake && f >= (s.shakeAt ?? 0) && f < (s.shakeAt ?? 0) + 10 ? (1 - (f - (s.shakeAt ?? 0)) / 10) * 22 : 0;
-  const sx = sh ? (random(`x${f}`) - 0.5) * sh : 0, sy = sh ? (random(`y${f}`) - 0.5) * sh : 0;
+  if (s.bump) scale *= 1 + N.bumpScale * interpolate(f, [s.bumpAt ?? 0, (s.bumpAt ?? 0) + N.bumpFrames], [0, 1], { ...clamp, easing: Easing.out(Easing.cubic) });
+  // shake: e^(−t/τ), gone in ≈ 6 frames; > 20 px read as a glitch (was 22 px, linear over 10 frames)
+  const st = f - (s.shakeAt ?? 0);
+  const sh = s.shake && st >= 0 && st < 8 ? N.shakePx * Math.exp(-st / N.shakeTau) : 0;
+  const sx = sh ? (random(`x${f}`) - 0.5) * 2 * sh : 0, sy = sh ? (random(`y${f}`) - 0.5) * 2 * sh : 0;
+  const rt = f - (s.rgbAt ?? -99);
+  const rgb = useRgbSplit(s.rgbAt !== undefined && rt >= 0 && rt < N.rgbFrames ? N.rgbPx * (1 - rt / N.rgbFrames) : 0);
   const video = { width: "100%", height: "100%", objectFit: "cover" } as const;
   const layer = (matte: boolean) => {
     let off = 0;
@@ -65,8 +81,11 @@ const ShotView: React.FC<{ s: Shot }> = ({ s }) => {
   const last = s.pieces[s.pieces.length - 1];
   return (
     <AbsoluteFill style={{ background: "black", overflow: "hidden" }}>
-      <AbsoluteFill style={{ translate: `${dir * w * 420 + sx}px ${sy}px`, scale: String(scale + w * 0.08), filter: blur.filter }}>
-        {layer(false)}
+      <AbsoluteFill style={{ translate: `${dir * w * 420 + sx}px ${sy}px`, scale: String(scale + w * 0.08), filter: [blur.filter, rgb.filter].filter(Boolean).join(" ") || undefined }}>
+        {s.stutterUntil !== undefined ? (
+          // stutter into the drop: the picture advances every stutterStep frames, then runs in real time from stutterUntil
+          <Freeze frame={Math.floor(f / N.stutterStep) * N.stutterStep} active={f < s.stutterUntil}>{layer(false)}</Freeze>
+        ) : layer(false)}
         {s.hold ? (
           <Sequence from={s.frames} durationInFrames={s.hold} layout="none">
             <Freeze frame={last.frames - 1}>
@@ -79,7 +98,35 @@ const ShotView: React.FC<{ s: Shot }> = ({ s }) => {
         {s.behind?.kicker ? <BehindTitle part="front" title={s.behind.title} kicker={s.behind.kicker} at={s.behind.at ?? 2} until={s.behind.until ?? s.frames} y={s.behind.y} x={s.behind.x} scale={s.behind.scale} /> : null}
       </AbsoluteFill>
       {blur.defs}
+      {rgb.defs}
+      {s.hold && s.circle ? (
+        <Sequence from={s.frames} durationInFrames={s.hold} layout="none">
+          <MarkerLoop {...s.circle} />
+        </Sequence>
+      ) : null}
+      {s.black ? <Sequence from={s.frames + (s.hold ?? 0)} durationInFrames={s.black} layout="none"><AbsoluteFill style={{ background: "black" }} /></Sequence> : null}
+      {s.bump && N.bumpFlash > 0 ? <AbsoluteFill style={{ background: "white", opacity: interpolate(f, [s.bumpAt ?? 0, (s.bumpAt ?? 0) + 2], [N.bumpFlash, 0], clamp) }} /> : null}
       {s.flashAt !== undefined ? <AbsoluteFill style={{ background: "white", opacity: interpolate(f, [s.flashAt, s.flashAt + 1, s.flashAt + 6], [0, N.flashPeak, 0], clamp) }} /> : null}
+    </AbsoluteFill>
+  );
+};
+
+/** A hand-drawn marker loop around a person on a freeze: drawn in 10 frames, 1.08 turns, left open, slightly uneven. */
+const MarkerLoop: React.FC<{ cx: number; cy: number; r: number }> = ({ cx, cy, r }) => {
+  const f = useCurrentFrame();
+  const n = 64, turns = 1.08, pts: string[] = [];
+  for (let i = 0; i <= n; i++) {
+    const t = i / n, a = -Math.PI * 0.62 + t * turns * 2 * Math.PI;
+    const k = 1 + (random(`m${i}`) - 0.5) * 0.06 + 0.05 * t; // uneven, and the end overshoots outward like a hand
+    pts.push(`${(cx + Math.cos(a) * r * 1.12 * k).toFixed(1)},${(cy + Math.sin(a) * r * 0.92 * k).toFixed(1)}`);
+  }
+  const len = 2 * Math.PI * r * turns * 1.1;
+  const drawn = interpolate(f, [2, 12], [0, 1], { ...clamp, easing: Easing.out(Easing.cubic) });
+  return (
+    <AbsoluteFill>
+      <svg width="100%" height="100%" viewBox={`0 0 ${W} ${H}`} style={{ position: "absolute", inset: 0 }}>
+        <polyline points={pts.join(" ")} fill="none" stroke={colors.accent} strokeWidth={9} strokeLinecap="round" strokeLinejoin="round" strokeDasharray={len} strokeDashoffset={len * (1 - drawn)} />
+      </svg>
     </AbsoluteFill>
   );
 };
@@ -164,7 +211,7 @@ export const Action: React.FC<{ withTrack?: boolean }> = ({ withTrack = false })
   return (
     <AbsoluteFill style={{ background: "black" }}>
       {SHOTS.map((s, i) => (
-        <Sequence key={`v${i}`} name={`${String(i + 1).padStart(2, "0")} · ${s.note}`} from={START[i]} durationInFrames={s.frames + (s.hold ?? 0)}>
+        <Sequence key={`v${i}`} name={`${String(i + 1).padStart(2, "0")} · ${s.note}`} from={START[i]} durationInFrames={s.frames + (s.hold ?? 0) + (s.black ?? 0)}>
           <ShotView s={s} />
         </Sequence>
       ))}

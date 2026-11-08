@@ -25,6 +25,13 @@ captionTail; "\\n" = new line), voice (src_from, src_to) → a cleaned punchline
 automix) + voiceAt/voiceGain, sfx [(frame, kind)] — sound only where something happens (no whoosh on every cut: the user
 called it strange), battery (a camera-battery % top right; ≤ 9 blinks red), behind {"title", "kicker", "at", "until",
 "mode": "person"|"subject"} → the title sits BEHIND the person (person_matte.py cuts them out of the same piece).
+Accents (transitions.md «Action accents»): bump (+ bumpAt) a push with a faint flash on the beat; crashAt a crash zoom landing on
+that frame (punch=[from, to]); rgbAt a short RGB split on a hit; stutterUntil the picture steps every stutterStep frames until
+that frame (into a drop); black=N pure black frames after the shot (the cold-open bumper: 3 shots × 9 f, black 6, then the
+hook); circle="auto" | {cx, cy, r} a marker loop over the freeze (hold=…; "auto" = the biggest face of the last frame).
+Budget (the user, 2026-11-09: «вжух на каждое действие» is a terrible video): WARNINGs when accents come closer than
+seamFxGapShots plain shots, a kind repeats within seamRepeatSec, rgb > rgbMax, crash > crashMax, impacts (flash, shake) >
+impactMax or closer than impactGapBeats beats. The cut table also flags cuts where neither side moves (cut on motion).
 Writes reel/public/shots/s<NN><k>.mp4 (2K: the canvas × 4/3), reel/public/voice/v<NN>.wav, reel/public/shots/*.matte.webm,
 work/shots.json, reel/src/shotsData.ts, work/action/sheet.jpg (the middle frame of every shot — look at the framing) and a
 sync table: every cut's frame and its distance to the nearest beat. Re-runs rebuild only shots whose spec changed.
@@ -39,7 +46,9 @@ SK = os.path.dirname(os.path.abspath(__file__))
 GRADE_LUT = "eq=contrast=1.12:saturation=1.22:gamma=1.04,curves=all='0/0 0.06/0.09 0.5/0.55 1/1'"
 GRADE_REC709 = "eq=contrast=1.06:saturation=1.12"
 VOICE_AF = "highpass=f=90,acompressor=threshold=-22dB:ratio=3:attack=8:release=150,afade=t=in:d=0.03,areverse,afade=t=in:d=0.08,areverse"
-FX_KEYS = {"whip", "punch", "punchAt", "flashAt", "shake", "shakeAt", "hold", "caption", "captionAt", "captionTail", "voiceAt", "voiceGain", "sfx", "battery"}
+FX_KEYS = {"whip", "punch", "punchAt", "flashAt", "shake", "shakeAt", "hold", "caption", "captionAt", "captionTail", "voiceAt", "voiceGain", "sfx", "battery",
+           "bump", "bumpAt", "crashAt", "rgbAt", "stutterUntil", "black", "circle"}
+ACCENTS = ("whip", "crashAt", "rgbAt", "stutterUntil", "bump")   # effect moments that must alternate with plain shots
 
 
 class Project:
@@ -180,7 +189,7 @@ class Project:
                 if known_v.get(v) != vspec or not os.path.exists("reel/public/" + v) or (only and i in only):
                     self.voice(f, *s["voice"], "reel/public/" + v); print("voice", v, flush=True)
             res.append({"n": i, "clip": s["clip"], "note": s["note"], "from": pos, "frames": n, "pieces": out, "voice": v, "vspec": vspec, "fx": s["fx"], "sync": s["sync"], "behind": s["behind"]})
-            pos += n + int(s["fx"].get("hold", 0) or 0)
+            pos += n + int(s["fx"].get("hold", 0) or 0) + int(s["fx"].get("black", 0) or 0)
         atomic_json({"fps": self.fps, "size": [self.W, self.H], "shots": res}, "work/shots.json")
         keep = {p[k] for s in res for p in s["pieces"] for k in ("file", "matte") if p.get(k)} | {s["voice"] for s in res if s["voice"]}
         for d in ("shots", "voice"):   # pieces of shots that no longer exist (a shorter list, a re-split) would only confuse
@@ -189,7 +198,7 @@ class Project:
                 rel = f"{d}/{fn}"
                 if rel not in keep and not fn.endswith(".mask.json") and (fn.endswith((".mp4", ".webm", ".wav"))): os.remove(f"reel/public/{rel}")
                 elif fn.endswith(".mask.json") and rel.replace(".mask.json", ".webm") not in keep: os.remove(f"reel/public/{rel}")
-        self.report(res, pos, end_frames); self.sheet(res)
+        self.report(res, pos, end_frames); self.budget(res); self.motion_at_cuts(res); self.sheet(res)
         self.write_ts(res, end_frames, hook, out_ts)
         print("ACTION_OK", len(res), "shots,", pos, "+", end_frames, "=", pos + end_frames, "frames", f"({(pos + end_frames) / self.fps:.1f} s)")
 
@@ -201,6 +210,11 @@ class Project:
             if g:
                 k = round((s["from"] - self.first) / self.bf); d = s["from"] - (self.first + k * self.bf)
                 near = f"{d:+5.1f}" + (" phrase" if s["from"] in g["phrases"] or any(abs(s["from"] - p) <= 1 for p in g["phrases"]) else "") + (" DROP" if g.get("drop") is not None and abs(s["from"] - g["drop"]) <= 1 else "")
+                hits = g.get("hits") or []   # real kick / snare transients (track_beats.py): accents belong on them
+                for key in ("flashAt", "crashAt", "rgbAt", "shakeAt"):
+                    if s["fx"].get(key) is not None and hits:
+                        at = s["from"] + int(s["fx"][key]); h = min(hits, key=lambda x: abs(x - at))
+                        if abs(h - at) > 2: probs.append(f"shot {s['n']} {s['note']!r}: {key} lands at reel frame {at}, the nearest drum hit is {h} ({at - h:+d}) — move it onto the hit")
             print(f"{s['n']:2d} {s['from']:6d} {s['frames']:4d}  {near:14s} {s['note']}")
             if s["sync"]:
                 at, what = s["sync"]; want = g.get("drop") if what == "drop" else what if isinstance(what, int) else None
@@ -210,6 +224,53 @@ class Project:
                 else: print(f"   sync ok: {s['note']!r} frame {at} = reel {got} ({what})")
         if g and total + end_frames > g["frames"] + 1: probs.append(f"the reel ({total + end_frames} frames) is longer than the track window ({g['frames']}) — track_beats.py --len")
         for p in probs: print("SYNC WARNING:", p)
+
+    def budget(self, res):
+        """Accents alternate with plain shots; each kind is rare; impacts are few and far apart."""
+        g = self.grid or {}; drop = g.get("drop"); phrases = set(g.get("phrases", []))
+        acc = [(s["n"], k, s["from"]) for s in res for k in ACCENTS if s["fx"].get(k) not in (None, False)]
+        for (i, k, t), (j, e, u) in zip(acc, acc[1:]):
+            on_grid = lambda x: x == drop or any(abs(x - p) <= 1 for p in phrases)
+            if j - i - 1 < N["seamFxGapShots"] and not (e == "whip" and on_grid(u)):
+                print(f"FX BUDGET: {k.replace('At', '')} on shot {i} and {e.replace('At', '')} on shot {j} — {j - i - 1} plain shot(s) between (≥ {N['seamFxGapShots']}); alternate")
+            if k == e and (u - t) / self.fps < N["seamRepeatSec"]: print(f"FX BUDGET: {k.replace('At', '')} again on shot {j} after {(u - t) / self.fps:.1f} s (≥ {N['seamRepeatSec']} s)")
+        for key, cap in (("rgbAt", N["rgbMax"]), ("crashAt", N["crashMax"])):
+            c = sum(1 for s in res if s["fx"].get(key) is not None)
+            if c > cap: print(f"FX BUDGET: {c} × {key.replace('At', '')} (at most {cap} per reel)")
+        hits = [s["from"] + int(s["fx"].get("flashAt", s["fx"].get("shakeAt", 0)) or 0) for s in res if s["fx"].get("flashAt") is not None or s["fx"].get("shake")]
+        if len(hits) > N["impactMax"]: print(f"FX BUDGET: {len(hits)} impacts (flash / shake) — at most {N['impactMax']} per reel")
+        bf = (self.grid or {}).get("beatFrames") or self.fps * 0.5
+        for a, b in zip(hits, hits[1:]):
+            if (b - a) / bf < N["impactGapBeats"]: print(f"FX BUDGET: impacts at frames {a} and {b} are {(b - a) / bf:.0f} beats apart (≥ {N['impactGapBeats']})")
+
+    def motion_at_cuts(self, res):
+        """A cut between two still frames reads as a jump: report cuts where neither side moves (mean frame difference)."""
+        try: import numpy as np
+        except ImportError: return
+        w, h = 96, round(96 * self.H / self.W)
+        def frames(path, tail):
+            args = ["ffmpeg", "-v", "error", "-nostdin"] + (["-sseof", "-0.12"] if tail else []) + ["-i", "reel/public/" + path, "-frames:v", "3", "-vf", f"scale={w}:{h},format=gray", "-f", "rawvideo", "-"]
+            x = np.frombuffer(subprocess.run(args, capture_output=True).stdout, dtype=np.uint8)
+            return x[: len(x) // (w * h) * w * h].reshape(-1, h, w).astype(np.float32)
+        still = []
+        for a, b in zip(res, res[1:]):
+            if b["fx"].get("whip") or b["fx"].get("bump") or a["fx"].get("hold") or a["fx"].get("black"): continue   # the seam itself moves
+            fa, fb = frames(a["pieces"][-1]["file"], True), frames(b["pieces"][0]["file"], False)
+            if len(fa) < 2 or len(fb) < 2: continue
+            ma, mb = np.abs(np.diff(fa, axis=0)).mean(), np.abs(np.diff(fb, axis=0)).mean()
+            if ma < 1.2 and mb < 1.2: still.append(f"{a['n']}→{b['n']}")
+        if still: print(f"STILL CUTS (neither side moves; cut on a movement or give the next shot bump=True): {', '.join(still)}")
+
+    def circle_auto(self, piece):
+        """Centre and radius (canvas px) of the biggest face in the last frame of a piece — the marker loop's target."""
+        import face_zones as fz
+        with tempfile.TemporaryDirectory(dir="work") as tmp:
+            img = os.path.join(tmp, "c.jpg")
+            subprocess.run(["ffmpeg", "-v", "error", "-nostdin", "-y", "-sseof", "-0.1", "-i", "reel/public/" + piece, "-frames:v", "1", "-vf", "scale=640:-2", img], check=True)
+            faces = fz.detect(img)
+        if not faces: return None
+        b = max(faces, key=lambda r: r["w"] * r["h"]); cw, ch = canvas_size(None, self.P)
+        return {"cx": round((b["x"] + b["w"] / 2) * cw), "cy": round((b["y"] + b["h"] / 2) * ch), "r": round(max(b["w"] * cw, b["h"] * ch) * 0.95)}
 
     def sheet(self, res):
         with tempfile.TemporaryDirectory(dir="work") as tmp:
@@ -234,6 +295,11 @@ class Project:
                     d["behind"].update(title_place("reel/public/" + mt_.replace(".webm", ".mask.json"), d["behind"].get("title"),
                                                    canvas_size(None, self.P), kicker=bool(d["behind"].get("kicker"))) or {})
             d.update({k: (list(map(list, v)) if k == "sfx" else v) for k, v in s["fx"].items()})
+            if d.get("circle") == "auto":
+                c = self.circle_auto(s["pieces"][-1]["file"])
+                if c: d["circle"] = c
+                else: d.pop("circle"); print(f"WARNING: shot {s['n']} {s['note']!r}: no face for circle=\"auto\" — pass circle={{cx, cy, r}}")
+            if d.get("circle") and not d.get("hold"): print(f"WARNING: shot {s['n']} {s['note']!r}: circle draws over the freeze — give it hold=45 or more")
             shots.append(d)
         g = self.grid or {}
         ts = ("// GENERATED by work/gen_action.py (scripts/actiongen.py) — do not edit by hand.\n"
