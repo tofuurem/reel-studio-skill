@@ -46,6 +46,7 @@ export const N = {
   sfxRiser: 0.35, // rising noise into a drop or a reveal (0.9 s, ends on the frame it is placed + 27)
   sfxBeep: 0.3, // short electronic beep (a low battery, a warning)
   sfxPowerdown: 0.6, // falling tone (the camera dies, the end)
+  sfxReal: 0.25, // a real recorded sound from sfx_find.py (Openverse), normalised to −20 LUFS — R.sfx(at, "real_<name>")
   sfxVariants: 3, // variants made of every whoosh / pop / hit (whoosh, whoosh2, whoosh3 …); reelgen.sfx cycles them
   // Layout (px on 1080x1920)
   safeTop: 180, // nothing important above this y

@@ -59,6 +59,7 @@ Generated from `numbers.json` by `scripts/numbers_gen.py` — edit the JSON, not
 | `sfxRiser` | 0.35 | rising noise into a drop or a reveal (0.9 s, ends on the frame it is placed + 27) |  | Sfx kind=riser |
 | `sfxBeep` | 0.3 | short electronic beep (a low battery, a warning) |  | Sfx kind=beep |
 | `sfxPowerdown` | 0.6 | falling tone (the camera dies, the end) |  | Sfx kind=powerdown |
+| `sfxReal` | 0.25 | a real recorded sound from sfx_find.py (Openverse), normalised to −20 LUFS — R.sfx(at, "real_<name>") | about as loud as the designed pops and whooshes at their levels | ui/Sfx.tsx, sfx_find.py |
 | `sfxVariants` | 3 | variants made of every whoosh / pop / hit (whoosh, whoosh2, whoosh3 …); reelgen.sfx cycles them | «одинаковый вжух на каждый переход — странно» (Halloween reel): the same sample twice in a row reads as a template | make_sfx.sh, reelgen.sfx() |
 
 **Layout (px on 1080x1920)**

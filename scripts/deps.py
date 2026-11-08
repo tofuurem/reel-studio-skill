@@ -2,7 +2,7 @@
 """Check — and with --install, install — everything the skill needs, for the OS it runs on. Standard library only: it runs
 before any venv exists, on a bare machine. setup_env.sh calls it first; on Linux run it yourself first (zsh may be missing).
 
-Usage: python3 -I deps.py [--install] [--dry-run] [--with covers]
+Usage: python3 -I deps.py [--install] [--dry-run] [--with covers] [--with sound]
   (no flag)   report: platform, every tool / library / python env with its version, what is missing and the command that fixes
               it, and which parts of the skill this platform cannot run
   --install   install what is missing: system packages (brew / apt / dnf / pacman), uv, then the shared python envs in
@@ -10,6 +10,9 @@ Usage: python3 -I deps.py [--install] [--dry-run] [--with covers]
               password (sudo -n); otherwise they are printed for the user to run, and the check stays MISSING
   --dry-run   with --install: print the commands, run nothing
   --with covers  also the Codex CLI for generated cover plates (ask the user first: it needs their ChatGPT login)
+  --with sound   also earshot (ask the user first: ≈ 1.6 GB with its two listening models, CPU only): designed sound effects
+              instead of the synthesized ones (make_sfx.sh → sfx_bank.py), ranking of real sounds found on Openverse
+              (sfx_find.py), a listening check of the render (ears.py), moments found by sound (earshot find)
 Parakeet is set up only when the Handy app's model is on the machine; otherwise transcription uses Whisper.
 Prints DEPS_OK (the pipeline can run here) or DEPS_MISSING <n> (exit 1).
 
@@ -29,6 +32,9 @@ NODE_MIN, PY_MIN = 18, (3, 9)
 FF_ENCODERS = {"libx264": True, "aac": True, "libvpx-vp9": False}            # True = required; libvpx-vp9 → mattes (title behind the person)
 FF_FILTERS = ("lut3d", "minterpolate", "adeclip", "alimiter", "acompressor", "ebur128", "loudnorm", "astats", "atempo", "xfade")
 FONTS = ("Unbounded.ttf", "Montserrat.ttf", "JetBrainsMono.ttf")
+EARSHOT = "v0.4.1"   # pinned: a skill update moves it after the bank ids in sfx_bank.py were checked against the new version
+EARSHOT_SPEC = f"earshot[mcp] @ git+https://github.com/Leonxlnx/earshot@{EARSHOT}"
+EARSHOT_HF = os.path.join(os.environ.get("EARSHOT_HOME") or os.path.expanduser("~/.cache/earshot"), "hf")
 # Remotion's headless Chrome on Linux: soname → package per manager (apt names get the "t64" suffix on Ubuntu 24.04+)
 CHROME_LIBS = {
     "libnss3.so": ("libnss3", "nss", "nss"), "libgbm.so.1": ("libgbm1", "mesa-libgbm", "mesa"),
@@ -124,7 +130,21 @@ def apt_name(n):
         if "Candidate:" in out and "(none)" not in out: return c
     return n
 
-def check(p, want_covers=False):
+def earshot_state():
+    """(installed version or None, listening models downloaded)."""
+    exe = shutil.which("earshot") or (os.path.expanduser("~/.local/bin/earshot") if os.path.exists(os.path.expanduser("~/.local/bin/earshot")) else None)
+    v = None
+    if exe:
+        uvx = shutil.which("uv") or os.path.expanduser("~/.local/bin/uv")
+        m = re.search(r"^earshot v(\S+)", run([uvx, "tool", "list"]).stdout, re.M) if os.path.exists(uvx) or shutil.which("uv") else None
+        v = m.group(1) if m else "?"
+    size = 0
+    for root, _, files in os.walk(EARSHOT_HF):
+        size += sum(os.path.getsize(os.path.join(root, f)) for f in files if not os.path.islink(os.path.join(root, f)))
+    return v, size > 800 * 2 ** 20
+
+
+def check(p, want_covers=False, want_sound=False):
     R, pm = Report(), p["pm"]
     def pkg(tool): return (PKG.get(tool) or {}).get(pm)
     def sys_fix(tool): return ("pkg", tool) if pkg(tool) else None
@@ -177,6 +197,11 @@ def check(p, want_covers=False):
         R.add(ok, f"env {name}", what, ("venv", name))
     if p["apple_silicon"] and not parakeet_model():
         R.add(False, "parakeet", "no Handy model here — transcription runs on Whisper (fine)", required=False)
+    ev, models = earshot_state()
+    es_ok = bool(ev) and ev.lstrip("v") == EARSHOT.lstrip("v") and models
+    info = (f"{ev}" + ("" if models else " — listening models not downloaded") + ("" if not ev or ev.lstrip("v") == EARSHOT.lstrip("v") else f" — the skill wants {EARSHOT}")) if ev else \
+        "optional: designed SFX, Openverse ranking, a listening check of the render — --install --with sound (≈ 1.6 GB)"
+    R.add(es_ok, "earshot (sound)", info, ("sound", None) if want_sound else None, required=want_sound)
     cx = ver(["codex", "--version"], r"(\d+\.\d+[\w.\-]*)")
     R.add(bool(cx), "codex (covers)", cx or "optional: generated cover plates (scripts/codex_image.sh) — --install --with covers, then `codex login`",
           ("covers", None) if want_covers else None, required=want_covers)
@@ -234,6 +259,12 @@ def install(p, R, dry):
         npm_pre = "" if p["mac"] or root_prefix(dry) in ("", None) else "sudo "
         if not sh(npm_pre + "npm install -g @openai/codex", dry) and not dry: manual.append("npm install -g @openai/codex")
         manual.append("codex login   # once, with your ChatGPT account")
+    if any(k == "sound" for k, _ in R.fix):   # earshot in its own uv tool env (torch CPU), then its two models (≈ 1 GB, Hugging Face)
+        if sh([uv, "tool", "install", "--force", EARSHOT_SPEC], dry):
+            es = shutil.which("earshot") or os.path.expanduser("~/.local/bin/earshot")
+            print("  earshot: downloading the listening models (CLAP + AST, ≈ 1 GB) — a few minutes")
+            if not sh([es, "doctor", "--fetch"], dry) and not dry: manual.append(f"{es} doctor --fetch   # the listening models")
+        elif not dry: manual.append(f"uv tool install --force '{EARSHOT_SPEC}' && earshot doctor --fetch")
     if any(k == "uv" for k, _ in R.fix):
         sh("curl -LsSf https://astral.sh/uv/install.sh | sh", dry)          # user-level, no sudo (~/.local/bin)
     os.environ["PATH"] = os.pathsep.join([os.path.expanduser("~/.local/bin"), os.path.expanduser("~/.cargo/bin"), os.environ["PATH"]])
@@ -261,15 +292,16 @@ def main():
     sys.stdout.reconfigure(line_buffering=True)   # keep our lines in order with the installers' output
     ap = argparse.ArgumentParser(description="Check / install the skill's dependencies for this OS.")
     ap.add_argument("--install", action="store_true"); ap.add_argument("--dry-run", action="store_true")
-    ap.add_argument("--with", dest="extras", action="append", default=[], choices=["covers"],
-                    help="optional parts the user agreed to: covers = Codex CLI for generated cover plates")
+    ap.add_argument("--with", dest="extras", action="append", default=[], choices=["covers", "sound"],
+                    help="optional parts the user agreed to: covers = Codex CLI for generated cover plates; sound = earshot (designed SFX, listening checks; ≈ 1.6 GB)")
     a = ap.parse_args()
     covers = "covers" in a.extras
-    p = plat(); R = check(p, covers)
+    sound = "sound" in a.extras
+    p = plat(); R = check(p, covers, sound)
     if a.install and R.fix and p["system"] in ("Darwin", "Linux"):
         show(p, R); print("installing:")
         manual = install(p, R, a.dry_run)
-        if not a.dry_run: R = check(p, covers); print("after install:")
+        if not a.dry_run: R = check(p, covers, sound); print("after install:")
         else: manual += [w for k, w in R.fix if k == "manual" and w not in manual]
         show(p, R)
         if manual: print("run yourself:"); [print("  " + m) for m in dict.fromkeys(manual)]

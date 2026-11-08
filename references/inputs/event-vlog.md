@@ -13,6 +13,7 @@ rounds of feedback). It is the raw-takes entry (`inputs/raw-takes.md`) with thes
   something) and gets the camera's own sound.
 - **Gentle voice cleanup**, levels even between people and cameras, no crackle when someone holds the mic at their mouth.
 - Uncensored for the vlog (the user's own channel/archive) unless they say otherwise; the reel cut from it is censored.
+  A censored long version (YouTube, family) keeps the whole cut: bleeps, masked captions, tracked blur — `craft/censor.md`.
 - Music: usually none («тут не получится ничего хорошего») — the event's own sound carries it. Ask.
 
 ## Steps (on top of raw-takes)
@@ -30,7 +31,8 @@ rounds of feedback). It is the raw-takes entry (`inputs/raw-takes.md`) with thes
    `work/dfvenv/bin/python -I $S/dialogue.py <project>` builds the vlog's one dialogue stem: per-clip level, per-segment
    leveling, camera sound under `amb` beats, crossfaded cuts, room tone, one chain (`craft/audio.md`). Re-run after every re-cut.
    Scene changes: `--bridge` (or `"bridge": true` on the 3–5 hardest ones) lets each place's own sound run a moment across the
-   cut (J/L, `craft/transitions.md` §2). Seams between places: mostly dissolves; one `leak`, a `match` when the same person is
+   cut (J/L, `craft/transitions.md` §2). Looking for the moments in long takes: with earshot, `earshot find <clip> "people
+   laughing" --top 5` (a cheer, a splash, fireworks) lists candidates by sound — confirm them in the transcript or the picture. Seams between places: mostly dissolves; one `leak`, a `match` when the same person is
    in two places, a `bodywipe` when someone crosses close to the camera — within the seam budget (`transitions.md` §0).
 5. **Night.** After the proxies: `python3 -I $S/night_lift.py <project>` lifts the shadows of dark clips (per clip, by mean
    luma); re-run after make_proxies re-encodes one (doctor warns).

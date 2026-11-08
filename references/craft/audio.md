@@ -27,7 +27,7 @@ music bed (WAV), SFX (WAV) ─────────────────�
    - **one chain** over the whole stem (`voicelib.voice_chain`): high-pass `hpfHz` + phase rotator (lowers the lopsided speech peaks ≈ 2.5 dB, spectrum unchanged) → measured cuts at 315 Hz (mud) / 900 Hz (box) → ONE soft-knee compressor (`compOverDb` over the leveled speech, `compRatio`, `compWindowMs` RMS) → measured presence (3.5 kHz) / air (9 kHz shelf) → de-esser (dynamic cut at 6.5 kHz, only on dominant sibilants) → static gain to `stemLufs` → look-ahead limiter at `stemPeakDb`. The EQ moves are bounded (`eqMaxCut`, `eqMaxBoost`, `eqMaxAir`) and correct `eqAmount` of the measured deviation from the target speech spectrum (LTASS + a little presence and air) — the speaker keeps their timbre;
    - **bleeps** from `work/bleeps.json` go into the stem (word muted, soft boop); `bleep.py` on the render is then a no-op;
    - `--keep-raw` writes `work/voice/dialogue_raw.wav` (assembly + levels, no chain) for an A/B by ear.
-4. **Mix in Remotion**: `<Dialogue />` at volume 1; the bed via `MusicBed` (0.3 in the cold open, wordless pauses and the tail, 0.18 under speech ≈ 20 LU down, short ramps, an end fade — `reel/public/audio/lofi_bed.wav` from `make_bed.sh <project> [seconds] <preset>`, or the user's track: `ffmpeg -i assets/music/<track> -ar 48000 -c:a pcm_s16le reel/public/audio/lofi_bed.wav`). SFX: `Sfx kind="tick|pop|done|whoosh|softwhoosh"` from `make_sfx.sh` (WAV, synthesised locally), one kind of sound per kind of action, levels in `numbers.md`. Music beds: `lofi.py` presets warm / night / bright / dusk, a different one per video. Everything stays PCM until the end.
+4. **Mix in Remotion**: `<Dialogue />` at volume 1; the bed via `MusicBed` (0.3 in the cold open, wordless pauses and the tail, 0.18 under speech ≈ 20 LU down, short ramps, an end fade — `reel/public/audio/lofi_bed.wav` from `make_bed.sh <project> [seconds] <preset>`, or the user's track: `ffmpeg -i assets/music/<track> -ar 48000 -c:a pcm_s16le reel/public/audio/lofi_bed.wav`). SFX: `Sfx kind="tick|pop|done|whoosh|softwhoosh"` from `make_sfx.sh` (WAV, local), one kind of sound per kind of action, levels in `numbers.md` — see «Sound effects» below. Music beds: `lofi.py` presets warm / night / bright / dusk, a different one per video. Everything stays PCM until the end.
 5. **Master** (`render.sh`): Remotion renders the sound as PCM (`--audio-codec=pcm-16`, a `.mov` intermediate); then the integrated LUFS of the whole mix → a static gain to `targetLufs` → a 4× oversampled limiter at `truePeakDb` (a true-peak limiter; `level=false`) → the ONLY AAC encode (`aac_at`, Apple's encoder, when ffmpeg has it), `aacBitrate`. One corrective pass if > 0.2 LU off; the render fails beyond ±`lufsTolerance`. Never single-pass `loudnorm` (dynamic: pumps the bed in every pause).
 6. **QA** — `audio_qa.py <file> --project <dir>` (render.sh runs it; warnings only): loudness, LRA in [`lraMin`, `lraMax`], true peak, digital silence inside the speech, pause floor under the speech, spectrum vs the target shape (mud / presence / air), tonal noise in the pauses (insects, hum), clicks at the dialogue cuts, codec and bitrate. Read the line before delivering. If the user says "music too loud", halve the bed (`R.music_bed(under=0.09)`), never touch the gain.
 
@@ -62,6 +62,30 @@ DJI Mic 2 / Mini / 3 on a talking head:
 Halloween vlog, 2026-11-02 … 04:
 - **Two lavs on L/R → `dualmic.py`.** Restore each channel alone (declip where clipped, DeepFilterNet limited to `dualmicAtten` dB — full strength sounded hollow), then a Dugan-style automix: each channel's gain is its share of the smoothed power. A downmix first doubles the room noise and adds the far mic's late copy of every voice (comb filter, «из толчка»). `--test START DUR <clip>` writes L / R / mix / downmix for an A/B by ear.
 - Levels, `"amb"` / `"raw"` beats and the chain are dialogue.py's (above). A vlog with no music: the event's own sound carries the picture beats; digital silence under a dance reads as a broken file.
+
+## Sound effects: designed, real, and heard
+
+- **Designed (default when earshot is installed — `deps.py --install --with sound`, ask the user: ≈ 1.6 GB).** `make_sfx.sh`
+  synthesizes the set, then `sfx_bank.py` replaces every kind with a sound from earshot's bank (252 sounds stored as code,
+  MIT, rendered locally, no models) at the SAME loudness, so the `numbers.md` levels still hold; the synthesized ones stay in
+  `audio/sfx/synth/` for an A/B (`SFX=synth make_sfx.sh` keeps them). Why: earshot itself heard our synthesized shutter as
+  «crisp hi-hats» (a weak match for «camera shutter»); real shutters scored strong. `--set whoosh=whoosh_big/cape` picks
+  another bank sound (`earshot sfx list`).
+- **Real recordings** when the picture shows an event the camera did not capture (a shutter, distant fireworks, a crowd):
+  `python3 -I $S/sfx_find.py <project> "camera shutter"` searches Openverse (≈ 5 M openly licensed sounds, mostly Freesound;
+  CC0 by default, `--license by` adds CC BY — never NC / ND / SA), downloads the top candidates, and with earshot RANKS them
+  by how well they sound like the words and finds the best moment in long ones; `--pick K --name shutter_film` →
+  `audio/sfx/real_shutter_film.wav` (−20 LUFS, level `sfxReal`) + `assets/sfx/real_shutter_film.json` (source, licence) and,
+  for CC BY, a credit line in `work/credits.md` for the post description. English queries work best. The camera's own sound
+  still comes first (`amb` beats).
+- **Heard**: after the render, `python3 -I $S/ears.py <project> <render>` → `EARS_DONE` lets earshot listen: every SFX cue
+  of the reel that is not heard (masked by the voice or bed, too quiet) or off its frame, tagged events, sections, loudness;
+  `work/qa/ears.png` is the annotated sheet (frames, spectrogram, events, loudness, cue markers). ≈ 30 s per minute of
+  render on an M-series CPU; `--from / --to` for a part of a long vlog.
+- **Moments by sound** (event vlogs): `earshot find <camera clip> "people laughing" --top 5` lists the best moments of a
+  long take for a description (laughter, a cheer, a splash, fireworks) — candidates for picture beats; confirm each in
+  the transcript or the picture (a talking head's breath can read as «a man laughing»).
+- Taste stays ours: one kind of sound per kind of action, quiet, never a whoosh on every cut (`transitions.md` §0).
 
 ## Action reel sound
 No music in the file — the user adds the track in Instagram (`inputs/action-reel.md`); the render is voices + a few SFX at −16 LUFS. Sound only where something happens: the hit on the drop, a beep, the power-down at the end; never the same whoosh on every cut (whips are silent). `make_sfx.sh` makes three variants of whoosh / softwhoosh / pop / hit and `R.sfx` cycles them. The punchline voices come from `actiongen.py` (dualmic's restoration), mastered by render.sh like everything else.

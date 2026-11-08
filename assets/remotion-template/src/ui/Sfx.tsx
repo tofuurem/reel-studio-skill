@@ -3,10 +3,12 @@ import { Audio } from "@remotion/media";
 import { interpolate, staticFile, useVideoConfig } from "remotion";
 import { N } from "../numbers";
 
-/** Sound kinds made locally by scripts/make_sfx.sh → public/audio/sfx/<kind>.wav (no network at render time). whoosh,
- *  softwhoosh, pop and hit also exist as <kind>2 / <kind>3: reelgen.sfx() cycles them, so a repeat is never the same sample. */
+/** Sound kinds made locally by scripts/make_sfx.sh → public/audio/sfx/<kind>.wav (no network at render time): designed
+ *  sounds from earshot's bank when it is installed (sfx_bank.py), synthesized otherwise. whoosh, softwhoosh, pop and hit also
+ *  exist as <kind>2 / <kind>3: reelgen.sfx() cycles them, so a repeat is never the same sample. real_<name>: a real
+ *  recording sfx_find.py fetched from Openverse (CC0 / CC BY). */
 export type SfxKind = "tick" | "pop" | "done" | "whoosh" | "softwhoosh" | "hit" | "shutter" | "rewind" | "riser" | "beep" | "powerdown";
-export type SfxName = SfxKind | `${"whoosh" | "softwhoosh" | "pop" | "hit"}${2 | 3}`;
+export type SfxName = SfxKind | `${"whoosh" | "softwhoosh" | "pop" | "hit"}${2 | 3}` | `real_${string}`;   // real_*: sfx_find.py (Openverse)
 
 /** Levels from numbers.json: a different sound per kind of action, all quiet (≈ 20 LU under speech); hit is the loud one. */
 export const SFX_LEVEL: Record<SfxKind, number> = {
@@ -14,7 +16,7 @@ export const SFX_LEVEL: Record<SfxKind, number> = {
   hit: N.sfxHit, shutter: N.sfxShutter, rewind: N.sfxRewind, riser: N.sfxRiser, beep: N.sfxBeep, powerdown: N.sfxPowerdown,
 };
 /** The level of a kind or one of its variants ("whoosh2" → whoosh). */
-export const sfxLevel = (name: string) => (SFX_LEVEL as Record<string, number>)[name.replace(/\d+$/, "")] ?? 0.3;
+export const sfxLevel = (name: string) => (name.startsWith("real_") ? N.sfxReal : (SFX_LEVEL as Record<string, number>)[name.replace(/\d+$/, "")] ?? 0.3);
 
 /** One sound effect; put it in a <Sequence from={frame} durationInFrames={N.sfxFrames}> (reelgen.sfx() does). */
 export const Sfx: React.FC<{ kind: SfxName; volume?: number }> = ({ kind, volume }) => <Audio src={staticFile(`audio/sfx/${kind}.wav`)} volume={volume ?? sfxLevel(kind)} />;

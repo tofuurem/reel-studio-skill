@@ -316,6 +316,13 @@
      "used": "Sfx kind=powerdown"
     },
     {
+     "key": "sfxReal",
+     "value": 0.25,
+     "what": "a real recorded sound from sfx_find.py (Openverse), normalised to −20 LUFS — R.sfx(at, \"real_<name>\")",
+     "why": "about as loud as the designed pops and whooshes at their levels",
+     "used": "ui/Sfx.tsx, sfx_find.py"
+    },
+    {
      "key": "sfxVariants",
      "value": 3,
      "what": "variants made of every whoosh / pop / hit (whoosh, whoosh2, whoosh3 …); reelgen.sfx cycles them",

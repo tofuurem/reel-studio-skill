@@ -4,12 +4,15 @@
 # moment, a freeze), rewind (a replay), riser (into a drop or a reveal), beep (low battery, a warning), powerdown (the end).
 # whoosh / softwhoosh / pop / hit come in sfxVariants versions (whoosh, whoosh2, whoosh3 …): reelgen.sfx() cycles them, so
 # two whooshes in a row are never the same sample («одинаковый вжух на каждый переход — странно», Halloween reel).
-# Usage: make_sfx.sh <project-dir>   → reel/public/audio/sfx/*.wav
+# Usage: make_sfx.sh <project-dir>   → reel/public/audio/sfx/*.wav      (SFX=synth make_sfx.sh … keeps the synthesized set)
+# With earshot installed (deps.py --with sound) the synthesized set is the reference: sfx_bank.py replaces every kind it has
+# with a designed sound from earshot's bank at the same loudness (originals in audio/sfx/synth/ for an A/B; rewind and
+# beep stay synthesized).
 # tick / pop / done keep their fixed synthesis gains (the numbers.json levels were tuned on them); everything else is
 # peak-normalised to −6 dBFS. Levels in Remotion come from numbers.json (sfx*: quiet, ≈ 20 LU under speech; hit is the
 # one loud exception in an action reel).
 set -e
-D="$1/reel/public/audio/sfx"; mkdir -p "$D"
+P="$1"; D="$P/reel/public/audio/sfx"; mkdir -p "$D"   # the loops below reuse $1 (set --)
 ff(){ ffmpeg -v error -nostdin -y "$@"; }
 ST="aformat=sample_rates=48000:channel_layouts=stereo"
 ff -f lavfi -i "anoisesrc=d=0.03:c=white:r=48000" -af "bandpass=f=3400:w=1200,afade=t=in:d=0.002,afade=t=out:st=0.008:d=0.022,volume=34dB,$ST" "$D/tick.wav"
@@ -31,5 +34,12 @@ ff -f lavfi -i "sine=f=1760:d=0.12:r=48000" -af "afade=t=in:d=0.005,afade=t=out:
 ff -f lavfi -i "aevalsrc='0.8*sin(2*PI*(650*exp(-t*2.2))*t)*exp(-t*1.2)':d=1.0:s=48000" -af "afade=t=out:st=0.75:d=0.25,$ST" "$D/powerdown.raw.wav"
 peak(){ ffmpeg -hide_banner -nostdin -i "$1" -af astats=measure_overall=Peak_level:measure_perchannel=0 -f null - 2>&1 | grep "Peak level" | tail -1 | sed 's/.*Peak level dB: //'; }
 for r in "$D"/*.raw.wav; do f=${r%.raw.wav}.wav; g=$(python3 -c "print(round(-6-($(peak "$r")),2))"); ff -i "$r" -af "volume=${g}dB" "$f"; rm "$r"; done
-for f in "$D"/*.wav; do printf "%-12s %s dB peak\n" "$(basename "$f" .wav)" "$(peak "$f")"; done
+if command -v earshot >/dev/null 2>&1 && [ "${SFX:-bank}" != synth ]; then
+  rm -rf "$D/synth"   # the fresh synthesized set becomes the loudness reference
+  EP=$(head -1 "$(command -v earshot)" | sed 's/^#!//')   # earshot's own python (uv tool env): numpy, soundfile, pyloudnorm
+  "$EP" -I "$(dirname "$0")/sfx_bank.py" "$P" | grep -v "^skip"
+else
+  rm -rf "$D/synth" "$P/work/sfx_bank.json"   # a synthesized set: no stale bank report
+  for f in "$D"/*.wav; do printf "%-12s %s dB peak\n" "$(basename "$f" .wav)" "$(peak "$f")"; done
+fi
 echo SFX_OK "$D"
