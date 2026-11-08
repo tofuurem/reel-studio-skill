@@ -17,6 +17,10 @@ git clone https://github.com/tofuurem/reel-studio-skill ~/.claude/skills/reel-st
 python3 -I ~/.claude/skills/reel-studio/scripts/deps.py --install
 ```
 
+Проект создаётся в папке, где открыт Claude Code. Перед созданием Claude спросит, туда ли. Постоянную папку для проектов можно задать в `REEL_STUDIO_PROJECTS`.
+
+`deps.py` без флагов только проверяет и пишет, чего не хватает. С `--install` ставит ffmpeg, node, uv и Python-окружения, при этом сам определяет систему. С `--with covers` ставит ещё Codex CLI для сгенерированных обложек: для него нужен вход в ChatGPT через `codex login`. Для расшифровки используется то, что есть на машине: Parakeet, если установлено приложение [Handy](https://handy.computer), иначе Whisper.
+
 ## Обновление
 
 Вставь в Claude Code или Codex:
@@ -26,10 +30,6 @@ python3 -I ~/.claude/skills/reel-studio/scripts/deps.py --install
 ```
 
 Или вручную: `git -C ~/.claude/skills/reel-studio pull`, затем `python3 -I ~/.claude/skills/reel-studio/scripts/deps.py --install`.
-
-Проект создаётся в папке, где открыт Claude Code. Перед созданием Claude спросит, туда ли. Постоянную папку для проектов можно задать в `REEL_STUDIO_PROJECTS`.
-
-`deps.py` без флагов только проверяет и пишет, чего не хватает. С `--install` ставит ffmpeg, node, uv и Python-окружения, при этом сам определяет систему. С `--with covers` ставит ещё Codex CLI для сгенерированных обложек: для него нужен вход в ChatGPT через `codex login`. Для расшифровки используется то, что есть на машине: Parakeet, если установлено приложение [Handy](https://handy.computer), иначе Whisper.
 
 ## Платформы
 
