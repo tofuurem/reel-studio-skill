@@ -2,7 +2,7 @@
 """Cut the main subject(s) out of an image with macOS Vision "subject lifting" → RGBA PNG (for covers, stickers, floating heroes).
 
 Usage: work/venv/bin/python -I cutout.py <in.jpg|png> <out.png> [--crop]      (--crop trims to the subject's bounding box)
-Works on photos (a person in a room) and on renders with a flat background. Needs macOS 14+ and the whisper venv (pyobjc Vision).
+Works on photos (a person in a room) and on renders with a flat background. Needs macOS 14+ and work/venv (pyobjc Vision).
 Check the result on a coloured background: thin things (fingers against bright windows, hair wisps) can lose pixels —
 then pick another frame rather than fixing the mask by hand.
 """

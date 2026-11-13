@@ -3,7 +3,7 @@
 
 Usage: python3 -I selfcheck.py [--verbose]
   numbers     references/craft/numbers.json → numbers.md / template numbers.ts are up to date (numbers_gen.py --check)
-  python      every script compiles; every argparse script answers --help (SKIP when it needs a venv module: mlx_whisper, Vision …)
+  python      every script compiles; every argparse script answers --help (SKIP when it needs a venv module: onnx_asr, Vision …)
   shell       zsh -n on every .sh
   swear       swear.py self-test
   flags       every `--flag` written after `<script>.py|.sh` in SKILL.md and references/**/*.md exists in that script
@@ -15,7 +15,7 @@ import glob, os, re, subprocess, sys
 HERE = os.path.dirname(os.path.abspath(__file__)); SKILL = os.path.dirname(HERE)
 verbose = "--verbose" in sys.argv
 probs, notes = [], []
-VENV_MODULES = ("soundfile", "mlx_whisper", "Vision", "Quartz", "Foundation", "parakeet_mlx", "gguf", "mlx", "torch", "df", "objc", "whisper")
+VENV_MODULES = ("soundfile", "onnx_asr", "mlx_whisper", "whisper", "Vision", "Quartz", "Foundation", "mlx", "torch", "df", "objc")
 
 def run(cmd, **kw): return subprocess.run(cmd, capture_output=True, text=True, **kw)
 

@@ -5,7 +5,7 @@ that never went through CapCut: you read the transcript, choose ranges, this tur
 Usage: cut_from_transcript.py plan.json [--out work/] [--lut path.cube] [--fps 30]
 plan.json:
   {"files": {"0001": "/abs/DJI_..._0001_D.MP4"},           # clip id → source
-   "words": {"0001": "work/new/c0001.json"},               # transcript with word timestamps (Whisper or pk2whisper.py)
+   "words": {"0001": "work/new/c0001.json"},               # transcript with word timestamps (transcribe.py --sources or pk2words.py)
    "voice": {"0001": "work/voice/out/c0001_DeepFilterNet3.wav"},   # optional: isolated voice, used to snap bleeps to real speech
    "exact": false,                                         # false: ranges snap to words (lead / tail around them)
                                                            # true: ranges are exact source seconds you measured with pauses.py
@@ -46,7 +46,7 @@ from common import N, canvas_size, clip_id, speech_run
 
 
 def capped(w):
-    """Parakeet sometimes stretches a sentence's last word over the following silence (c0080 «жопа»: 22 s) — cap it."""
+    """A recognizer can stretch a sentence's last word over the following silence (Parakeet once gave c0080 «жопа» 22 s) — cap it."""
     return {**w, "end": min(w["end"], w["start"] + max(0.7, 0.11 * len(w["word"].strip())))}
 
 
@@ -159,7 +159,7 @@ for clip, s0, s1, note, opts, mute, speed, ws in pieces:
                  "text": " ".join(w["word"].strip() for w in ws), **opts})
     for w in ws:
         if is_swear(w["word"]) and not mute:
-            b0, b1 = w["start"] - 0.2, w["end"] + 0.15
+            b0, b1 = w["start"] - 0.2, w["end"] + 0.28   # GigaAM word ends are ±0.1–0.26 s (40 ms token grid): a longer tail than the old Parakeet +0.15
             if clip in VOICE and os.path.exists(VOICE[clip]):
                 r0, r1 = speech_run(VOICE[clip], (w["start"] + w["end"]) / 2); b0, b1 = max(r0, b0), min(r1, b1)
             b0 = max(b0, s0); b1 = min(max(b1, b0 + 0.25), s1)

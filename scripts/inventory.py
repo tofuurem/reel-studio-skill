@@ -11,7 +11,7 @@ Usage: python3 -I inventory.py <project> <files|dirs>… [--lut <cube>] [--lut-m
 Kinds follow ingest.py (camera = any video that is not a screen recording or in assets/video, screen = «Запись экрана»/Screen Recording/rec_*, video, audio, image). The LUT goes on
 camera clips only, per clip (common.lut_for: --lut-map, the DJI colour profile in the file, --lut; otherwise none), and on every HDR video (HLG / PQ: iPhone «HDR»,
 a camera in HLG mode) as the HDR → Rec.709 LUT — the sheets show what the proxies will look like. "silent" =
-no audio stream or mean level under −70 dB over the first 2 min: do not transcribe those (Whisper invents «Продолжение
+no audio stream or mean level under −70 dB over the first 2 min: do not transcribe those (a recognizer invents «Продолжение
 следует…» on silence). ffmpeg here has no drawtext, so tiles carry no labels — a frame that cannot be grabbed becomes a grey
 tile, so the tile order always equals the table order. AppleDouble `._*` files are skipped.
 """
@@ -109,7 +109,7 @@ for i, r in enumerate(rows, 1):
     L.append(f"| {i} | {r['kind']} | {unicodedata.normalize('NFC', os.path.basename(r['file']))} | {r.get('dur', 0):.1f}s | {r.get('w') or ''}×{r.get('h') or ''} | {fps} | {r.get('camera') or ''} | {r['mb']} | {lvl(r['level'])} | {'yes' if r['silent'] else ''} | {r['lut'] or ''} | {r['shot']} | {note(r)} |")
 talk = [r["file"] for r in rows if r["kind"] in ("camera", "screen", "video", "audio") and not r["silent"]]
 L += ["", "Sheets: " + (", ".join(made) or "none") + " (tiles in table order within each kind; grey = frame could not be read).", "",
-      "Next: transcribe only the files with sound —", "", "```", "cd " + P, "work/pkvenv/bin/python -I $S/transcribe_parakeet.py \\", *[f"  '{t}' \\" for t in talk], "```"]
+      "Next: transcribe only the files with sound —", "", "```", "cd " + P, "work/gigvenv/bin/python -I $S/transcribe_gigaam.py \\", *[f"  '{t}' \\" for t in talk], "```"]
 open(os.path.join(OUT, "inventory.md"), "w").write("\n".join(L) + "\n")
 json.dump(rows, open(os.path.join(OUT, "inventory.json"), "w"), ensure_ascii=False, indent=1)
 print("\n".join(L[:len(rows) + 6])); print("INVENTORY_DONE", OUT)

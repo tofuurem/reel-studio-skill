@@ -1,9 +1,18 @@
 #!/usr/bin/env python3
 """Build the timeline speech track from the cut list and transcribe it with word timestamps.
 
-Usage: work/venv/bin/python -I transcribe.py [--cutlist work/cutlist.json] [--public reel/public] [--lang ru] [--model mlx-community/whisper-large-v3-turbo] [--audio-only]
-       work/venv/bin/python -I transcribe.py --sources <camera files…>   → work/new/c<id>.json (per-source word JSONs for cut_from_transcript.py / raw takes)
-First run downloads the model (≈1.6 GB); large-v3-turbo runs ≈ 10× realtime on M-series.
+Usage: work/gigvenv/bin/python -I transcribe.py [--cutlist work/cutlist.json] [--public reel/public] [--lang ru] [--audio-only] [--max-gb 6]
+       work/gigvenv/bin/python -I transcribe.py --sources <camera files…>   → work/new/c<id>.json (per-source word JSONs for cut_from_transcript.py / raw takes)
+The recognizer follows --lang:
+- ru (default): GigaAM v3 + Silero VAD (transcribe_gigaam.py's engine, ≈ 20× realtime on CPU, punctuation included); the first
+  run downloads the model (≈ 1 GB) from Hugging Face. Word ends are approximations (the last token's 40 ms emission + 0.12 s):
+  ±0.1–0.26 s against a hand check — never trim a cut on them.
+- any other language (en, de, es …): Whisper large-v3-turbo (mlx-whisper on Apple Silicon, openai-whisper elsewhere; ≈ 1.6 GB on
+  the first run) — it invents text on silence, so never feed it silent recordings.
+Each engine lives in its own env (gigvenv / venv): started from the other one, the script re-runs itself under the right python.
+It re-runs itself under mem_guard.py on macOS (exit 137 when the guard stopped it; --no-guard skips it).
+Output has the Whisper-shaped dict make_captions.py / tl_words.py / bleeps_from_timeline.py read: {text, segments:[{start, end, text,
+words:[{word (leading space, punctuation attached), start, end, probability}]}], language}.
 
 The timeline track is assembled sample-accurately (16 kHz mono) from the proxies, so the audio matches what plays and word
 times are already on the final timeline:
@@ -14,11 +23,11 @@ times are already on the final timeline:
 - CapCut voiceovers (cutlist "tracks", audio, in "voiceovers") are mixed in at their timeline position — from the levelled
   reel/public/audio/<name>.m4a when an older project has it, else the original file — so captions and anchors cover them;
 - a silent cut list (silent_timeline.py, images-only reel) writes an empty transcript and stops.
-Writes work/audio/timeline.wav + work/audio/timeline.json. --audio-only stops after the wav (needs no whisper).
+Writes work/audio/timeline.wav + work/audio/timeline.json. --audio-only stops after the wav (needs no model).
 """
 import argparse, json, os, subprocess, sys, wave
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from common import clip_id, load_offsets, proxy_file, speech_tracks, src_dur
+from common import add_guard_args, clip_id, guard_reexec, load_offsets, proxy_file, speech_tracks, src_dur
 
 SR = 16000
 
@@ -63,28 +72,65 @@ def build_timeline_audio(cl, public, offsets, out_wav):
     with wave.open(out_wav, "wb") as w: w.setnchannels(1); w.setsampwidth(2); w.setframerate(SR); w.writeframes(pcm)
     return log
 
-def whisper(wav, a):
-    try: import mlx_whisper   # lazy: the assembly above needs only numpy + ffmpeg
+def ensure_engine(a):
+    """GigaAM lives in work/gigvenv, Whisper in work/venv: switch to the python that has the engine for --lang (once)."""
+    if a.audio_only: return
+    import importlib.util
+    mods, env = (["onnx_asr"], "gigvenv") if a.lang == "ru" else (["mlx_whisper", "whisper"], "venv")
+    if any(importlib.util.find_spec(m) for m in mods): return
+    py = os.path.abspath(f"work/{env}/bin/python")
+    if not os.path.exists(py) or os.environ.get("TRANSCRIBE_SWITCHED"):
+        sys.exit(f"{'GigaAM' if env == 'gigvenv' else 'Whisper'} is not installed for this python and work/{env} is missing — run setup_env.sh")
+    sys.stdout.flush(); os.execve(py, [py, "-I", os.path.abspath(sys.argv[0]), *sys.argv[1:]], {**os.environ, "TRANSCRIBE_SWITCHED": "1"})
+
+_MODEL = []
+def gigaam(wavs, a):
+    """GigaAM v3 + Silero VAD over each wav → one Whisper-shaped dict per wav (words keep their leading space and punctuation)."""
+    import onnx_asr   # here, so --help and --audio-only work without the venv
+    from pathlib import Path
+    from transcribe_gigaam import transcribe_clip
+    if not _MODEL: _MODEL.append(onnx_asr.load_model(a.model, providers=["CPUExecutionProvider"]).with_vad(onnx_asr.load_vad("silero"), threshold=0.5).with_timestamps())
+    model = _MODEL[0]
+    out = []
+    for wav in wavs:
+        sentences, dropped = transcribe_clip(Path(wav), model, model)
+        segs = [{"start": s["start"], "end": s["end"], "text": s["text"],
+                 "words": [{"word": w["w"], "start": w["s"], "end": w["e"], "probability": 1.0} for w in s["words"]]} for s in sentences]
+        if dropped: print(f"  {dropped} non-Russian segment(s) dropped", flush=True)
+        out.append({"text": " ".join(s["text"] for s in segs), "segments": segs, "language": "ru"})
+    return out
+
+def whisper(wavs, a):
+    """Whisper for every language GigaAM does not cover: mlx-whisper on Apple Silicon, openai-whisper elsewhere (same dict)."""
+    try: import mlx_whisper
     except ImportError: mlx_whisper = None
-    if mlx_whisper: return mlx_whisper.transcribe(wav, path_or_hf_repo=a.model, language=a.lang, word_timestamps=True, verbose=False)
-    # not Apple Silicon: openai-whisper (deps.py installs it there) gives the same result dict; the model by its plain name
-    import whisper
-    name = a.model.rsplit("/", 1)[-1].removeprefix("whisper-")   # mlx-community/whisper-large-v3-turbo → large-v3-turbo
+    if mlx_whisper: return [mlx_whisper.transcribe(w, path_or_hf_repo=a.whisper_model, language=a.lang, word_timestamps=True, verbose=False) for w in wavs]
+    import whisper as ow
+    name = a.whisper_model.rsplit("/", 1)[-1].removeprefix("whisper-")   # mlx-community/whisper-large-v3-turbo → large-v3-turbo
     print(f"whisper: openai-whisper {name} (no MLX here — slower)", flush=True)
-    return whisper.load_model(name).transcribe(wav, language=a.lang, word_timestamps=True, verbose=False)
+    m = ow.load_model(name)
+    return [m.transcribe(w, language=a.lang, word_timestamps=True, verbose=False) for w in wavs]
+
+def recognize(wavs, a):
+    return gigaam(wavs, a) if a.lang == "ru" else whisper(wavs, a)
 
 def main():
     ap = argparse.ArgumentParser(); ap.add_argument("--cutlist", default="work/cutlist.json"); ap.add_argument("--public", default="reel/public")
-    ap.add_argument("--lang", default="ru"); ap.add_argument("--model", default="mlx-community/whisper-large-v3-turbo")
+    ap.add_argument("--lang", default="ru", help="ru → GigaAM; any other code (en, de …) → Whisper")
+    ap.add_argument("--model", default="gigaam-v3-e2e-rnnt", help="onnx-asr model name (gigaam-v3-rnnt: no punctuation)")
+    ap.add_argument("--whisper-model", default="mlx-community/whisper-large-v3-turbo", help="Whisper model for languages other than ru")
+    add_guard_args(ap, 6.0)
     ap.add_argument("--sources", nargs="*", help="transcribe these camera files (or isolated-voice WAVs) instead of the timeline → work/new/c<id>.json")
     ap.add_argument("--audio-only", action="store_true", help="build work/audio/timeline.wav and stop")
     a = ap.parse_args()
+    ensure_engine(a)
+    if not a.audio_only: guard_reexec(a)
     if a.sources:
         os.makedirs("work/new", exist_ok=True)
         for src in a.sources:
             cid = clip_id(src); wav = f"work/new/{cid}.wav"
             subprocess.run(["ffmpeg", "-v", "error", "-nostdin", "-y", "-i", src, "-vn", "-ac", "1", "-ar", str(SR), wav], check=True)
-            r = whisper(wav, a); json.dump(r, open(f"work/new/{cid}.json", "w"), ensure_ascii=False, indent=1); os.remove(wav)
+            r = recognize([wav], a)[0]; json.dump(r, open(f"work/new/{cid}.json", "w"), ensure_ascii=False, indent=1); os.remove(wav)
             print("=====", cid)
             for s in r["segments"]: print(f"[{s['start']:6.1f}-{s['end']:6.1f}] {s['text'].strip()}")
         print("TRANSCRIBE_DONE"); return
@@ -95,7 +141,7 @@ def main():
         json.dump({"text": "", "segments": [], "language": a.lang}, open("work/audio/timeline.json", "w"))
         print("silent cut list: nothing to transcribe (captions, tl_words anchors and bleeps are skipped)"); print("TRANSCRIBE_DONE silent"); return
     if a.audio_only: print("TIMELINE_AUDIO_DONE work/audio/timeline.wav"); return
-    r = whisper("work/audio/timeline.wav", a)
+    r = recognize(["work/audio/timeline.wav"], a)[0]
     json.dump(r, open("work/audio/timeline.json", "w"), ensure_ascii=False, indent=1)
     print("=====", "timeline"); print(r["text"])
     for s in r["segments"]: print(f"[{s['start']:6.1f}-{s['end']:6.1f}] {s['text'].strip()}")

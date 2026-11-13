@@ -6,23 +6,24 @@ Usage: python3 -I deps.py [--install] [--dry-run] [--with covers] [--with sound]
   (no flag)   report: platform, every tool / library / python env with its version, what is missing and the command that fixes
               it, and which parts of the skill this platform cannot run
   --install   install what is missing: system packages (brew / apt / dnf / pacman), uv, then the shared python envs in
-              ~/.cache/reel-studio (venv, dfvenv, pkvenv — per platform). Root-only commands run through sudo only when it needs no
+              ~/.cache/reel-studio (venv, dfvenv, gigvenv, vlmvenv on Apple Silicon). Root-only commands run through sudo only when it needs no
               password (sudo -n); otherwise they are printed for the user to run, and the check stays MISSING
   --dry-run   with --install: print the commands, run nothing
   --with covers  also the Codex CLI for generated cover plates (ask the user first: it needs their ChatGPT login)
   --with sound   also earshot (ask the user first: ≈ 1.6 GB with its two listening models, CPU only): designed sound effects
               instead of the synthesized ones (make_sfx.sh → sfx_bank.py), ranking of real sounds found on Openverse
               (sfx_find.py), a listening check of the render (ears.py), moments found by sound (earshot find)
-Parakeet is set up only when the Handy app's model is on the machine; otherwise transcription uses Whisper.
+Speech: GigaAM v3 for Russian (gigvenv), Whisper for every other language (venv).
 Prints DEPS_OK (the pipeline can run here) or DEPS_MISSING <n> (exit 1).
 
 Platforms
   macOS, Apple Silicon   everything
-  macOS, Intel           no MLX: Whisper runs as openai-whisper (CPU, slower), no Parakeet (transcribe.py does the first pass)
+  macOS, Intel           no MLX: Whisper runs as openai-whisper (CPU, slower), no vlm_describe.py; GigaAM runs on the CPU as everywhere
   Linux (and WSL2)       no Apple Vision: face_zones / people_zones / person_matte / cutout do not run → no people-aware 9:16 crop
                          of landscape footage (use a 16:9 canvas or crop keys by hand), no title behind the person, no cut-out
-                         covers; no Parakeet; no hardware decode (software decode, slower); Whisper as openai-whisper (CUDA if
-                         an NVIDIA GPU is visible, else CPU)
+                         covers; no vlm_describe.py (MLX); Whisper as openai-whisper (CUDA if an NVIDIA GPU is visible, else CPU); no hardware decode (software decode, slower); no memory guard
+                         (mem_guard.py reads macOS's footprint — the heavy scripts then run unguarded)
+  Speech recognition     Russian: GigaAM v3 (gigvenv, onnxruntime on the CPU, every platform); other languages: Whisper (venv)
   Windows                not native (zsh scripts, POSIX paths): install WSL2 + Ubuntu and run the skill inside it
 """
 import argparse, json, os, platform, re, shutil, subprocess, sys
@@ -83,17 +84,10 @@ def plat():
     p["mac"] = s == "Darwin"; p["nvidia"] = bool(shutil.which("nvidia-smi")) and run(["nvidia-smi", "-L"]).returncode == 0
     return p
 
-def parakeet_model():
-    """Parakeet runs on what the user already has: the Handy app's GGUF or a model converted from it. None → Whisper only."""
-    import glob
-    conv = os.path.join(CACHE, "models", "parakeet-v3-handy", "model.safetensors")
-    if os.path.exists(conv): return conv
-    g = glob.glob(os.path.expanduser("~/.cache/huggingface/hub/models--handy-computer--parakeet-tdt-0.6b-v3-gguf/snapshots/*/*.gguf"))
-    return g[0] if g else None
-
 def venv_specs(p):
     """name → (python version, import check, pip packages, extra index for torch, what it is for). Per platform."""
     cpu_torch = None if (p["mac"] or p["nvidia"]) else "https://download.pytorch.org/whl/cpu"   # Linux without a GPU: CPU wheels (≈ 200 MB, not 2.5 GB)
+    # Whisper: speech in languages other than Russian (transcribe.py --lang en …); Russian goes to GigaAM (gigvenv)
     if p["mac"]:
         asr = (["mlx_whisper"], ["mlx-whisper"]) if p["apple_silicon"] else (["whisper"], ["openai-whisper"])
         vis = (["Vision", "Quartz", "Foundation"], ["pyobjc-framework-Vision", "pyobjc-framework-Quartz"])
@@ -103,12 +97,17 @@ def venv_specs(p):
     mat = (["torch", "torchvision", "transformers", "timm", "kornia", "einops"], ["torch", "torchvision", "transformers", "timm", "kornia", "einops"])
     specs = {
         "venv": ("3.12", ["numpy", *asr[0], *vis[0], *mat[0]], ["numpy", *asr[1], *vis[1], *mat[1]], None if p["apple_silicon"] or p["mac"] else cpu_torch,
-                 "transcribe.py (Whisper), numpy scripts, person_matte.py (BiRefNet)" + (", Apple Vision" if p["mac"] else "")),
+                 "numpy scripts, Whisper (speech other than Russian), person_matte.py (BiRefNet)" + (", Apple Vision" if p["mac"] else "")),
         "dfvenv": ("3.11", ["df", "torchaudio", "soundfile"], ["deepfilternet", "soundfile", "torch==2.4.1", "torchaudio==2.4.1"], cpu_torch,
                    "voice_clean.py, dualmic.py, dialogue.py"),
     }
-    if p["apple_silicon"] and parakeet_model():
-        specs["pkvenv"] = ("3.12", ["parakeet_mlx", "gguf"], ["parakeet-mlx", "gguf"], None, "transcribe_parakeet.py (first-pass map of raw clips)")
+    # GigaAM v3 (Russian ASR, ONNX on the CPU) + Silero VAD: Russian speech (transcribe_gigaam.py, transcribe.py --lang ru);
+    # the models download from Hugging Face on first use (≈ 1 GB + 2 MB)
+    specs["gigvenv"] = ("3.12", ["onnx_asr", "onnxruntime", "soundfile", "huggingface_hub"], ["onnx-asr[hub]", "onnxruntime", "soundfile"], None,
+                        "transcribe_gigaam.py / transcribe.py (GigaAM v3 + Silero VAD, Russian)")
+    if p["apple_silicon"]:
+        # Qwen3-VL-8B 4-bit (optional frame descriptions, vlm_describe.py); the model (≈ 5.4 GB) is fetched by hand, see SKILL.md
+        specs["vlmvenv"] = ("3.12", ["mlx_vlm", "PIL"], ["mlx-vlm"], None, "vlm_describe.py (optional: describe frames with Qwen3-VL)")
     return specs
 
 def ver(cmd, rx):
@@ -194,9 +193,7 @@ def check(p, want_covers=False, want_sound=False):
         py = os.path.join(CACHE, name, "bin", "python")
         ok = os.path.exists(py) and run([py, "-I", "-c", "import " + ", ".join(mods)], timeout=120).returncode == 0
         if ok and name == "dfvenv": ok = os.path.exists(os.path.join(CACHE, name, "bin", "deepFilter"))
-        R.add(ok, f"env {name}", what, ("venv", name))
-    if p["apple_silicon"] and not parakeet_model():
-        R.add(False, "parakeet", "no Handy model here — transcription runs on Whisper (fine)", required=False)
+        R.add(ok, f"env {name}", what, ("venv", name), required=name != "vlmvenv")   # vlmvenv: optional frame descriptions
     ev, models = earshot_state()
     es_ok = bool(ev) and ev.lstrip("v") == EARSHOT.lstrip("v") and models
     info = (f"{ev}" + ("" if models else " — listening models not downloaded") + ("" if not ev or ev.lstrip("v") == EARSHOT.lstrip("v") else f" — the skill wants {EARSHOT}")) if ev else \
@@ -219,8 +216,8 @@ def limits(p):
                 "9:16 crop of landscape footage (16:9 canvas, or crop keys by hand), no title behind the person, no cut-out covers",
                 "hardware decode (videotoolbox): software decode, proxies take longer"]
     if not p["apple_silicon"]:
-        out += ["MLX (Apple Silicon only): Whisper runs as openai-whisper" + (" on CUDA" if p["nvidia"] else " on the CPU — several times slower"),
-                "Parakeet (transcribe_parakeet.py): use transcribe.py for the first pass"]
+        out += ["MLX (Apple Silicon only): Whisper (speech other than Russian) runs as openai-whisper" + (" on CUDA" if p["nvidia"] else " on the CPU — several times slower")
+                + "; vlm_describe.py (Qwen3-VL frame descriptions) does not run"]
     return out
 
 def sh(cmd, dry):

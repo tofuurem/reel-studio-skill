@@ -5,7 +5,7 @@ Usage: tl_words.py [--words work/audio/timeline.json] [--out work/tl_words.txt] 
 This is the sync source for every graphic: a generator (work/gen_reel.py) looks words up and writes absolute frames
 into Reel.tsx, so a re-cut only needs a re-run, not a hand edit of numbers. See references/craft/storyboard.md.
 The same corrections as the captions apply (caption_patches.json on raw tokens, brands.json spellings), and words in silent
-ranges are skipped — so fw("Tripo") finds the word the captions show, not whisper's «трипа»."""
+ranges are skipped — so fw("Tripo") finds the word the captions show, not the recognizer's «трипа»."""
 import argparse, json, os, sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from common import apply_patches, brand, glue, in_ranges, load_json, silent_ranges

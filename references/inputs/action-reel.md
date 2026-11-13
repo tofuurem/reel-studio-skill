@@ -17,7 +17,7 @@ straight from the camera files by `scripts/actiongen.py`, the template's `Action
 - Frame the people, not the centre: every landscape shot is cropped by Apple Vision (people_zones); check the sheet.
 
 ## Steps
-1. **Material map.** Transcripts (Parakeet or Whisper, whichever is set up — `inputs/raw-takes.md` step 2) and the inventory sheets of the event. Write `work/notes/shots.md`:
+1. **Material map.** Transcripts (`transcribe_gigaam.py`, Russian; another language: `transcribe.py --sources --lang <code>` — `inputs/raw-takes.md` step 2) and the inventory sheets of the event. Write `work/notes/shots.md`:
    candidate moments with clip + seconds, what happens (action, a face, a punchline), how strong. Look at frames
    (`folder_sheet.sh`, `contact_sheet.sh`) — an «action» in a transcript is often someone sitting down. For a specific
    moment the user names («где крутили колесо») search the frames, and if it is not there, say so and offer the nearest one.

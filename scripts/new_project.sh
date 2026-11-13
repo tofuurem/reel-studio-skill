@@ -23,7 +23,7 @@ if [ "$N" -gt 0 ]; then
   mkdir -p "$P"/work/{voice/out,new,vo,pk,broll}
   for i in $(seq 1 $N); do
     mkdir -p "$P/ep$i/work" "$P/ep$i/out"; [ -e "$P/ep$i/assets" ] || ln -s ../assets "$P/ep$i/assets"
-    # the pool's restored voice, transcripts, carriers, Parakeet maps and b-roll are shared; work/voice/dialogue.json stays per
+    # the pool's restored voice, transcripts, carriers, GigaAM maps and b-roll are shared; work/voice/dialogue.json stays per
     # episode (dialogue.py's gains depend on the episode's own ranges — a shared folder let episodes overwrite each other)
     mkdir -p "$P/ep$i/work/voice"; [ -e "$P/ep$i/work/voice/out" ] || ln -s "../../../work/voice/out" "$P/ep$i/work/voice/out"
     for d in new vo pk broll; do [ -e "$P/ep$i/work/$d" ] || ln -s "../../work/$d" "$P/ep$i/work/$d"; done
