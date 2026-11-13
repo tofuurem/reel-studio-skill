@@ -43,7 +43,7 @@ rounds of feedback). It is the raw-takes entry (`inputs/raw-takes.md`) with thes
    cut (J/L, `craft/transitions.md` §2). Looking for the moments in long takes: with earshot, `earshot find <clip> "people
    laughing" --top 5` (a cheer, a splash, fireworks) lists candidates by sound — confirm them in the transcript or the picture. Seams between places: mostly dissolves; one `leak`, a `match` when the same person is
    in two places, a `bodywipe` when someone crosses close to the camera — within the seam budget (`transitions.md` §0).
-5. **Night.** After the proxies: `python3 -I $S/night_lift.py <project>` lifts the shadows of dark clips (per clip, by mean
+5. **Night.** After the proxies: `work/venv/bin/python -I $S/night_lift.py <project>` lifts the shadows of dark clips (per clip, by mean
    luma); re-run after make_proxies re-encodes one (doctor warns).
 6. **Graphics**: chapter tags and a title, few cards — the people and the event are the content. A title behind a person
    (`R.cutaway(..., behind={...})`) works for the opening.

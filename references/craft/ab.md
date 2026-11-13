@@ -53,7 +53,7 @@ Rendering a stretch, not the reel:
 $S/render_part.sh <project> Reel <from s> <dur s> <abs>/out/ab/v1.mp4     # variant 1 as it is now
 # … change the one thing (gen_reel.py / plan opts / a component prop), regenerate …
 $S/render_part.sh <project> Reel <from s> <dur s> <abs>/out/ab/v2.mp4
-python3 -I $S/ab_video.py out/ab/captions.mp4 out/ab/v1.mp4 out/ab/v2.mp4 --names "как сейчас,крупнее"
+work/venv/bin/python -I $S/ab_video.py out/ab/captions.mp4 out/ab/v1.mp4 out/ab/v2.mp4 --names "как сейчас,крупнее"
 ```
 `render_part.sh` = `npx remotion render --frames=a-b` with the memory guard, one tab, caffeinate; seconds are timeline
 seconds. `Reel` (1080) is enough for a decision — `Reel2K` only when the question is about detail. After the decision, put
@@ -61,7 +61,7 @@ the project back to the chosen variant before the full render (`doctor.py` check
 
 Without rendering — the same source clip with different ffmpeg filters (LUT, night lift, crop, speed):
 ```
-python3 -I $S/ab_video.py out/ab/look.mp4 "<clip>@63.2:5" "<clip>@63.2:5" --names "LUT,LUT + теплее" \
+work/venv/bin/python -I $S/ab_video.py out/ab/look.mp4 "<clip>@63.2:5" "<clip>@63.2:5" --names "LUT,LUT + теплее" \
     --vf 1 "lut3d=file='<cube>'" --vf 2 "lut3d=file='<cube>',colorbalance=rm=0.04:bm=-0.04"
 ```
 `--grid` puts the versions side by side (sound of `--audio K`): right for a look (colour, crop, exposure) where showing one

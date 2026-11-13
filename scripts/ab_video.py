@@ -3,7 +3,7 @@
 a card «2» (two beeps), version 2 … with the version's number in the corner and the sound matched in loudness — or all
 versions side by side (--grid) for a look decision (LUT, night lift, crop, caption style) where the order would mislead.
 
-Usage: python3 -I ab_video.py <out.mp4> <file>[@start:dur] <file>[@start:dur] … [--names "как сейчас,теплее"]
+Usage: work/venv/bin/python -I ab_video.py <out.mp4> <file>[@start:dur] <file>[@start:dur] … [--names "как сейчас,теплее"]
            [--vf K "<ffmpeg video filters>"] [--af K "<ffmpeg audio filters>"]   (on version K, 1-based; repeatable;
            --vf runs after the downscale — a LUT on 4K costs 4× the time and looks the same at phone size)
            [--grid [--audio K]] [--lufs -16] [--max-h 1920] [--card 1.4]

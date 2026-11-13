@@ -7,6 +7,7 @@ Usage: python3 -I selfcheck.py [--verbose]
   shell       zsh -n on every .sh
   swear       swear.py self-test
   flags       every `--flag` written after `<script>.py|.sh` in SKILL.md and references/**/*.md exists in that script
+  interp      no script that imports numpy / PIL / torch … is documented with a bare `python3 -I`
   contracts   the template's Timeline.tsx stub exports the names gen_timeline.py writes (Timeline, TOTAL_FRAMES)
   lint        lint_reel.py on assets/remotion-template/src (errors fail, warnings are listed)
 Prints SELFCHECK_OK or the problems (exit 1).
@@ -58,6 +59,24 @@ for d in docs:
                 if flag not in text: probs.append(f"flags: {os.path.relpath(d, SKILL)}:{n}: {name} has no {flag}")
 
 notes.append(f"flags: {checked} documented flags checked")
+
+# interp: a bare `python3 -I` has no numpy / PIL / torch on a clean machine — scripts that import them run from a venv
+import ast
+HEAVY = {"numpy", "PIL", "torch", "scipy", "soundfile", "pyloudnorm", "onnx_asr", "voicelib"}
+def heavy_imports(path):
+    """Modules a plain run needs: imports at module level and in main() (a lazy import inside a helper does not count —
+    common.py's CLI never reaches title_place's numpy)."""
+    try: tree = ast.parse(open(path, encoding="utf-8").read())
+    except SyntaxError: return set()
+    nodes = list(tree.body) + [x for f in tree.body if isinstance(f, ast.FunctionDef) and f.name == "main" for x in ast.walk(f)]
+    nodes += [x for st in tree.body if isinstance(st, ast.If) for x in ast.walk(st)]   # if __name__ == "__main__": …
+    mods = {(a.name if isinstance(n, ast.Import) else n.module or "").split(".")[0] for n in nodes if isinstance(n, (ast.Import, ast.ImportFrom)) for a in (n.names if isinstance(n, ast.Import) else [n])}
+    return mods & HEAVY
+needs = {n for n, p in scripts.items() if n.endswith(".py") and heavy_imports(p)}
+for d in docs:
+    for n, line in enumerate(open(d, encoding="utf-8"), 1):
+        for m in re.finditer(r"python3 -I (?:\$S/|\S*?/)?([a-z_0-9]+\.py)", line):
+            if m.group(1) in needs: probs.append(f"interp: {os.path.relpath(d, SKILL)}:{n}: {m.group(1)} imports numpy-class modules — run it with work/venv/bin/python (or dfvenv / gigvenv)")
 stub = os.path.join(SKILL, "assets/remotion-template/src/Timeline.tsx")
 if not os.path.exists(stub): probs.append("contracts: assets/remotion-template/src/Timeline.tsx (stub) missing — a fresh scaffold does not compile")
 else:

@@ -96,7 +96,7 @@ slideshow. Use it on the hardest 3–5 scene changes of an event vlog (`event-vl
 
 ## 5. Review the seams
 
-- `python3 -I $S/motion_gate.py <project> <render.mp4>` → `MOTION_GATE_DONE`: `work/qa/cuts_NN.jpg` (frames cut−2 … cut+1
+- `work/venv/bin/python -I $S/motion_gate.py <project> <render.mp4>` → `MOTION_GATE_DONE`: `work/qa/cuts_NN.jpg` (frames cut−2 … cut+1
   of every cut), `FROZEN` stretches, the seam count. Look at the sheet: the eye should land where it was, something should
   move across a cut, no effect seam right after another.
 - A **fresh reviewer** for the first full render: start a subagent with no production history — give it only the render, the
