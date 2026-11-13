@@ -19,6 +19,14 @@ os.chdir(sys.argv[1])
 FPS = 15; W, H = 960, 540
 OFFS = json.load(open("work/proxy_offsets.json"))
 
+def frame_size(clip):
+    """Analysis frames keep the proxy's own aspect (short side 540): a squashed 960×540 frame of a 9:16 proxy made every
+    blur 3× too narrow on the canvas (ellipse radii are shares of the width and of the height)."""
+    r = subprocess.run(["ffprobe", "-v", "error", "-select_streams", "v:0", "-show_entries", "stream=width,height", "-of", "csv=p=0",
+                        f"reel/public/footage/{clip}.mp4"], capture_output=True, text=True, check=True)
+    vw, vh = (int(x) for x in r.stdout.strip().split(",")[:2]); k = 540 / min(vw, vh)
+    return round(vw * k / 2) * 2, round(vh * k / 2) * 2
+
 def frames(job, tmp):
     a, b = job["src"]; off = OFFS[job["clip"]]
     subprocess.run(["ffmpeg", "-v", "error", "-nostdin", "-y", "-ss", f"{max(0, a - off):.3f}", "-t", f"{b - a:.3f}", "-i", f"reel/public/footage/{job['clip']}.mp4",
@@ -38,6 +46,7 @@ def faces(path):
 
 os.makedirs("work/names", exist_ok=True); os.makedirs("work/stills/names", exist_ok=True)
 for job in json.load(open("work/name_jobs.json")):
+    W, H = frame_size(job["clip"]); tw, th = W // 3, H // 3
     with tempfile.TemporaryDirectory() as tmp:
         paths = frames(job, tmp); box = []
         if job.get("keys"):
@@ -72,12 +81,12 @@ for job in json.load(open("work/name_jobs.json")):
         json.dump(out, open(f"work/names/{job['id']}.json", "w"), ensure_ascii=False)
         idx = list(range(0, len(paths), max(1, len(paths) // 6)))[:6]; tiles = []
         for i in idx:
-            im = Image.open(paths[i]).convert("RGB").resize((320, 180)); d = ImageDraw.Draw(im); cx, top, w, h = box[i]
-            d.rectangle([(cx - w / 2) * 320, top * 180, (cx + w / 2) * 320, (top + h) * 180], outline=(0, 255, 0), width=2)
-            ty = (top + h + 0.02) * 180 if below else (top - 0.025) * 180
-            d.ellipse([cx * 320 - 4, ty - 4, cx * 320 + 4, ty + 4], fill=(255, 0, 0)); tiles.append(im)
-        s = Image.new("RGB", (len(tiles) * 320, 180))
-        for k, t in enumerate(tiles): s.paste(t, (k * 320, 0))
+            im = Image.open(paths[i]).convert("RGB").resize((tw, th)); d = ImageDraw.Draw(im); cx, top, w, h = box[i]
+            d.rectangle([(cx - w / 2) * tw, top * th, (cx + w / 2) * tw, (top + h) * th], outline=(0, 255, 0), width=2)
+            ty = (top + h + 0.02) * th if below else (top - 0.025) * th
+            d.ellipse([cx * tw - 4, ty - 4, cx * tw + 4, ty + 4], fill=(255, 0, 0)); tiles.append(im)
+        s = Image.new("RGB", (len(tiles) * tw, th))
+        for k, t in enumerate(tiles): s.paste(t, (k * tw, 0))
         s.save(f"work/stills/names/{job['id']}.jpg", quality=85)
         print(f"{job['id']}: {len(box)} frames, below={below}")
 print("NAME_TRACKS_DONE")

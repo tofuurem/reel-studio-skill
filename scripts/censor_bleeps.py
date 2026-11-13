@@ -8,7 +8,9 @@ Neighbours closer than 350 ms merge. Then: dialogue.py <project> --bleeps work/b
 --out reel/public/audio/dialogue_censored.wav (the uncensored stem stays), and captions through censor_text().
 Why: Halloween vlog censored (2026-11-09, YouTube + family) — «накуривается, грибов объешься — запикать».
 """
-import json, os, re
+import json, os, re, sys
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from clipid import clip_id  # noqa: E402
 
 CENSOR_WORDS = re.compile(r"^(сук[аиуое]?|сучк\w*|наркоман\w*|долбо[её]б\w*)$", re.I)
 DRUG_WORDS = re.compile(r"(косяк|кисяк|косяч|накур|раскур|^курим$|^курит|покур|^трав[аук]|шишк|ганж|каннабис|гриб|^дунуть|^дунем|затяж|бошк)", re.I)
@@ -35,7 +37,8 @@ if __name__ == "__main__":
     out = list(json.load(open(a.swears)) if os.path.exists(a.swears) else [])
     for s in cl["main"]:
         if float(s.get("volume", 1)) < 0.01: continue
-        cid = re.search(r"DJI_\d+_(\w+?)_D", os.path.basename(s["path"])).group(1).split("x")[0]
+        if not s.get("path"): continue
+        cid = clip_id(s["path"])[1:].split("x")[0]   # the id every other script uses (IMG_1234.MOV, Cyrillic names, drone files)
         p = f"work/new/c{cid}.json"
         if not os.path.exists(p): continue
         a, d, sp = s["srcStart"], s["srcDur"], float(s.get("speed", 1) or 1)

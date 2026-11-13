@@ -12,9 +12,11 @@ Why: anchors are words, never typed frame numbers — a re-cut is a re-run. Ever
 Sequences get premountFor; imports are found by scanning `export const` in reel/src, so an example never imports a scene
 that the project does not have. Numbers come from references/craft/numbers.json (rg.N).
 """
-import difflib, json, os, re, subprocess, sys
+import difflib, json, math, os, re, subprocess, sys
 
 SKILL = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, os.path.join(SKILL, "scripts"))
+from clipid import clip_id  # noqa: E402
 N = {r["key"]: r["value"] for s in json.load(open(os.path.join(SKILL, "references/craft/numbers.json")))["sections"] for r in s["rows"]}
 
 _PUNCT = ".,!?…:;«»\"'()[]—–-“”„"
@@ -232,8 +234,7 @@ class Project:
         import glob as _g
         zoom = {z["fromFrame"]: z for z in (json.load(open(os.path.join(self.root, "work/timeline_zoom.json"))).get("segments", [])
                                            if os.path.exists(os.path.join(self.root, "work/timeline_zoom.json")) else [])}
-        stem = lambda sg: os.path.splitext(os.path.basename(sg["path"]))[0]
-        cid_of = lambda sg: "c" + (re.match(r"DJI_\d+_(\w+?)_D$", stem(sg)).group(1) if re.match(r"DJI_\d+_(\w+?)_D$", stem(sg)) else stem(sg))
+        cid_of = lambda sg: clip_id(sg["path"])   # the same id as the proxies and the censor jobs (a private regex lost IMG / Cyrillic names)
         data, layers = [], []
         for path in sorted(_g.glob(os.path.join(self.root, folder, "*.json"))):
             j = json.load(open(path)); a, b = j["src"]; fj = j["fps"]; name = os.path.basename(path)[:-5]
@@ -282,7 +283,12 @@ class Project:
         if vary and kind in self.VARIED:
             k = self._sfx_n.get(kind, 0); self._sfx_n[kind] = k + 1
             file = kind if k % N["sfxVariants"] == 0 else f"{kind}{k % N['sfxVariants'] + 1}"
-        return seq(at, at + N["sfxFrames"], tag("Sfx", kind=file, volume=volume), name or f"sfx {file}")
+        n = N["sfxFrames"]
+        wav = os.path.join(self.root, "reel/public/audio/sfx", file + ".wav")
+        if file.startswith("real_") and os.path.exists(wav):   # a real recording (sfx_find.py) can be seconds long: never cut it mid-sound
+            import wave
+            with wave.open(wav) as w: n = max(n, math.ceil(w.getnframes() / w.getframerate() * 30) + 2)
+        return seq(at, at + n, tag("Sfx", kind=file, volume=volume), name or f"sfx {file}")
 
     def sfx_many(self, frames, kind, name=None):
         return "\n".join(self.sfx(f, kind, f"{name or 'sfx ' + kind} {i}") for i, f in enumerate(frames))

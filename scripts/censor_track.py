@@ -40,6 +40,14 @@ if len(sys.argv) < 2 or not os.path.isdir(sys.argv[1]): sys.exit(__doc__)
 os.chdir(sys.argv[1]); sys.argv = sys.argv[1:]
 OFFS = json.load(open("work/proxy_offsets.json"))
 
+def frame_size(clip):
+    """Analysis frames keep the proxy's own aspect (short side 540): a squashed 960×540 frame of a 9:16 proxy made every
+    blur 3× too narrow on the canvas (ellipse radii are shares of the width and of the height)."""
+    r = subprocess.run(["ffprobe", "-v", "error", "-select_streams", "v:0", "-show_entries", "stream=width,height", "-of", "csv=p=0",
+                        f"reel/public/footage/{clip}.mp4"], capture_output=True, text=True, check=True)
+    vw, vh = (int(x) for x in r.stdout.strip().split(",")[:2]); k = 540 / min(vw, vh)
+    return round(vw * k / 2) * 2, round(vh * k / 2) * 2
+
 
 def frames(job, tmp):
     a, b = job["src"]; off = OFFS[job["clip"]]
@@ -142,16 +150,17 @@ def follow_mode(job, paths):
 
 def grid(clip, a, b, step=0.5):
     """Source frames of a clip with a 10 % grid and their source seconds — read follow / box keys off it."""
-    job = {"clip": clip, "src": [a, b]}
+    global W, H
+    job = {"clip": clip, "src": [a, b]}; W, H = frame_size(clip); tw, th = W // 2, H // 2
     with tempfile.TemporaryDirectory() as tmp:
         paths = frames(job, tmp); idx = list(range(0, len(paths), max(1, int(round(step * FPS)))))[:24]; tiles = []
         for i in idx:
-            im = Image.open(paths[i]).convert("RGB").resize((480, 270)); d = ImageDraw.Draw(im)
+            im = Image.open(paths[i]).convert("RGB").resize((tw, th)); d = ImageDraw.Draw(im)
             for g in range(1, 10):
-                d.line([(g * 48, 0), (g * 48, 270)], fill=(255, 255, 0) if g == 5 else (90, 90, 90)); d.line([(0, g * 27), (480, g * 27)], fill=(255, 255, 0) if g == 5 else (90, 90, 90))
+                d.line([(g * tw / 10, 0), (g * tw / 10, th)], fill=(255, 255, 0) if g == 5 else (90, 90, 90)); d.line([(0, g * th / 10), (tw, g * th / 10)], fill=(255, 255, 0) if g == 5 else (90, 90, 90))
             d.rectangle([0, 0, 70, 14], fill=(0, 0, 0)); d.text((3, 2), f"{a + i / FPS:.2f}s", fill=(255, 255, 0)); tiles.append(im)
-        s = Image.new("RGB", (4 * 480, ((len(tiles) + 3) // 4) * 270))
-        for k, t in enumerate(tiles): s.paste(t, ((k % 4) * 480, (k // 4) * 270))
+        s = Image.new("RGB", (4 * tw, ((len(tiles) + 3) // 4) * th))
+        for k, t in enumerate(tiles): s.paste(t, ((k % 4) * tw, (k // 4) * th))
         out = f"work/stills/censor/grid_{clip}_{a:.1f}.jpg"; os.makedirs(os.path.dirname(out), exist_ok=True); s.save(out, quality=84); print(out)
 
 
@@ -169,15 +178,15 @@ def box_mode(job, n):
 
 
 def sheet(job, paths, ell, out):
-    idx = list(range(0, len(paths), max(1, len(paths) // 24)))[:24]; tiles = []
+    idx = list(range(0, len(paths), max(1, len(paths) // 24)))[:24]; tiles = []; tw, th = W // 3, H // 3
     for i in idx:
-        im = Image.open(paths[i]).convert("RGB").resize((320, 180)); d = ImageDraw.Draw(im)
+        im = Image.open(paths[i]).convert("RGB").resize((tw, th)); d = ImageDraw.Draw(im)
         for cx, cy, rx, ry in ell[i]:   # red: the soft edge; yellow: the core BlurPatch blurs fully (black 60 % of the radius)
-            d.ellipse([(cx - rx) * 320, (cy - ry) * 180, (cx + rx) * 320, (cy + ry) * 180], outline=(255, 0, 0), width=2)
-            d.ellipse([(cx - 0.6 * rx) * 320, (cy - 0.6 * ry) * 180, (cx + 0.6 * rx) * 320, (cy + 0.6 * ry) * 180], outline=(255, 230, 0), width=2)
+            d.ellipse([(cx - rx) * tw, (cy - ry) * th, (cx + rx) * tw, (cy + ry) * th], outline=(255, 0, 0), width=2)
+            d.ellipse([(cx - 0.6 * rx) * tw, (cy - 0.6 * ry) * th, (cx + 0.6 * rx) * tw, (cy + 0.6 * ry) * th], outline=(255, 230, 0), width=2)
         d.text((6, 4), f"{job['src'][0] + i / FPS:.1f}s", fill=(255, 255, 0)); tiles.append(im)
-    s = Image.new("RGB", (6 * 320, ((len(tiles) + 5) // 6) * 180))
-    for k, t in enumerate(tiles): s.paste(t, ((k % 6) * 320, (k // 6) * 180))
+    s = Image.new("RGB", (6 * tw, ((len(tiles) + 5) // 6) * th))
+    for k, t in enumerate(tiles): s.paste(t, ((k % 6) * tw, (k // 6) * th))
     s.save(out, quality=82)
 
 
@@ -187,6 +196,7 @@ jobs = json.load(open("work/censor_jobs.json")); want = [x for x in sys.argv[1:]
 os.makedirs("work/censor", exist_ok=True); os.makedirs("work/stills/censor", exist_ok=True)
 for job in jobs:
     if want and job["name"] not in want: continue
+    W, H = frame_size(job["clip"])
     with tempfile.TemporaryDirectory() as tmp:
         paths = frames(job, tmp)
         mode = job["mode"]
