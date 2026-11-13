@@ -55,6 +55,27 @@ def tree(root):
     return res
 
 
+def stop(proc):
+    """TERM, then KILL, to the command's whole tree: its process group AND every descendant by pid — Remotion starts Chrome
+    detached, in a group of its own, so killpg alone left it running. The tree is read before the first signal: once the
+    command dies its children are reparented to launchd and can no longer be found."""
+    pids = [p for p in tree(proc.pid) if p != os.getpid()]
+    for sig in (signal.SIGTERM, signal.SIGKILL):
+        try: os.killpg(proc.pid, sig)
+        except OSError: pass
+        for p in pids:
+            try: os.kill(p, sig)
+            except OSError: pass
+        for _ in range(10):
+            if proc.poll() is not None and not any(alive(p) for p in pids): return
+            time.sleep(0.3)
+
+
+def alive(pid):
+    try: os.kill(pid, 0); return True
+    except OSError: return False
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--max-gb", type=float, default=12.0, help="ceiling for the command itself, GB")
@@ -69,6 +90,9 @@ def main():
     if free0 < a.min_free_gb + 1:
         sys.exit("too little free memory to start (%.1f GB free) — close something and run again" % free0)
     proc = subprocess.Popen(cmd, start_new_session=True)
+    def on_signal(signum, _frame):   # Ctrl-C, kill or a tool timeout on the guard must not leave the command running unwatched
+        stop(proc); print("MEM_GUARD: interrupted (signal %d) — the command was stopped" % signum, file=sys.stderr); sys.exit(128 + signum)
+    for sig in (signal.SIGINT, signal.SIGTERM, signal.SIGHUP): signal.signal(sig, on_signal)
     peak, reason = 0.0, None
     while proc.poll() is None:
         fp = footprint_gb(tree(proc.pid))
@@ -79,13 +103,7 @@ def main():
         elif free < a.min_free_gb:
             reason = "the system has %.1f GB left (reserve %.1f)" % (free, a.min_free_gb)
         if reason:
-            os.killpg(proc.pid, signal.SIGTERM)
-            for _ in range(10):
-                if proc.poll() is not None:
-                    break
-                time.sleep(0.3)
-            if proc.poll() is None:
-                os.killpg(proc.pid, signal.SIGKILL)
+            stop(proc)
             print("MEM_GUARD: stopped — %s. Peak %.1f GB." % (reason, peak), file=sys.stderr)
             sys.exit(137)
         time.sleep(a.every)
