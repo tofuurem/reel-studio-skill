@@ -44,8 +44,8 @@ export const MusicBed: React.FC<{ src?: string; speechStart?: number; speechEnd:
     let o = speechStart > 0 ? interpolate(f, [speechStart - R, speechStart], [1, 0], c) : 0;
     o = Math.max(o, interpolate(f, [speechEnd, speechEnd + R], [0, 1], c));
     for (const [a, b] of pauses) {
-      if (b - a < 2) continue;
-      const r = Math.min(R, Math.floor((b - a) / 2));
+      const r = Math.min(R, Math.floor((b - a - 1) / 2)); // a short pause ramps faster instead of throwing (a+r must stay < b-r)
+      if (r < 1) continue;
       o = Math.max(o, interpolate(f, [a, a + r, b - r, b], [0, 1, 1, 0], c));
     }
     return o;

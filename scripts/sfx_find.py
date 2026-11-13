@@ -63,8 +63,12 @@ def search(a, P):
     out = os.path.join(P, "work/sfx_search", slug(a.query)); os.makedirs(out, exist_ok=True)
     for i, r in enumerate(rows, 1):
         f = os.path.join(out, f"{i:02d}.mp3")
-        if not os.path.exists(f): subprocess.run(["curl", "-sSL", "--max-time", "60", "-o", f, r["url"]], check=True)
+        if not os.path.exists(f):   # --fail: an HTTP error page must not be saved as an .mp3
+            if subprocess.run(["curl", "-sSLf", "--max-time", "60", "-o", f, r["url"]]).returncode or not os.path.getsize(f):
+                print(f"  skip «{r.get('title')}»: the file did not download"); os.path.exists(f) and os.remove(f); r["file"] = None; continue
         r["file"] = f
+    rows = [r for r in rows if r.get("file")]
+    if not rows: sys.exit("no candidate downloaded — Openverse / Freesound did not answer; try again later")
     rank = earshot_json(["rank", a.query, *[r["file"] for r in rows]])
     if rank:
         by = {os.path.realpath(x.get("path", "")): x for x in (rank.get("results") or rank.get("ranked") or [])}
@@ -109,7 +113,7 @@ def pick(a, P):
             "page": r.get("foreign_landing_url"), "file": r.get("url"), "trim": [t0, t1] if t0 is not None else None, "attribution": r.get("attribution")}
     os.makedirs(os.path.join(P, "assets/sfx"), exist_ok=True); json.dump(meta, open(os.path.join(P, "assets/sfx", name + ".json"), "w"), ensure_ascii=False, indent=1)
     if r["license"] == "by":
-        line = f"- Звук «{r.get('title')}» — {r.get('creator')}, CC BY {v} ({r.get('foreign_landing_url')})"
+        line = f"- Звук «{r.get('title')}» — {r.get('creator')}, CC BY {v} ({r.get('foreign_landing_url')}), обрезан и выровнен по громкости"   # CC BY: say it was changed
         cp = os.path.join(P, "work/credits.md"); old = open(cp).read() if os.path.exists(cp) else "# Credits for the post description\n\n"
         if line not in old: open(cp, "w").write(old + line + "\n")
         print(f"CC BY: credit it in the post description — work/credits.md:\n{line}")

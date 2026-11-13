@@ -110,8 +110,12 @@ export const Clip: React.FC<Props> = ({
   // every other seam: ui/Seam.tsx says how the clip looks right after its cut-in and right before its cut-out
   const look = mergeLooks(enter && enter !== "whip" ? enterLook(enter, frame, enterFrames, match, wipe) : NO_LOOK, exit !== "none" && exit !== "whip" ? exitLook(exit, frame, realLen) : NO_LOOK);
   // the leak's light drifts across the cut as one sweep: u runs over the outgoing tail and on through the incoming head
-  const leakU = exit === "leak" && frame <= realLen ? interpolate(frame, [realLen - N.seamLeakOut, realLen], [0, 0.4], { extrapolateLeft: "clamp", extrapolateRight: "clamp" })
-    : interpolate(frame, [0, N.seamLeakIn], [0.4, 1], { extrapolateLeft: "clamp", extrapolateRight: "clamp" });
+  // (the outgoing clip under the overlap continues ITS sweep from the cut — counting from frame 0 there made the light jump back;
+  // a clip that enters and leaves on a leak sweeps at both ends)
+  const cl = { extrapolateLeft: "clamp", extrapolateRight: "clamp" } as const;
+  const leakU = exit === "leak" && frame > realLen - N.seamLeakOut
+    ? frame <= realLen ? interpolate(frame, [realLen - N.seamLeakOut, realLen], [0, 0.4], cl) : interpolate(frame - realLen, [0, N.seamLeakIn], [0.4, 1], cl)
+    : interpolate(frame, [0, N.seamLeakIn], [0.4, 1], cl);
 
   const opacity = (enter === "whip" ? 1 : look.opacity);
   let translateX = 0;

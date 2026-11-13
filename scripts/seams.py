@@ -58,8 +58,9 @@ def match(p, q, public, fps, tmp):
 def bodywipe(p, public, fps, tmp):
     import people_zones as pz
     pp = proxy_file(public, p["clip"]); pw, ph = fz.proxy_size(pp)
-    t0 = (p["tb"] + p["durFrames"] * p.get("speed", 1)) / fps
-    subprocess.run(["ffmpeg", "-v", "error", "-nostdin", "-y", "-ss", f"{t0:.3f}", "-t", "2.5", "-i", pp, "-an", "-vf", f"fps={fps},scale=640:-2",
+    sp = float(p.get("speed", 1) or 1); t0 = (p["tb"] + p["durFrames"] * sp) / fps
+    # one sample per TIMELINE frame: a sped-up clip shows sp source seconds per second
+    subprocess.run(["ffmpeg", "-v", "error", "-nostdin", "-y", "-ss", f"{t0:.3f}", "-t", f"{2.5 * sp:.3f}", "-i", pp, "-an", "-vf", f"fps={fps / sp:.4f},scale=640:-2",
                     os.path.join(tmp, "w%04d.jpg")], check=True)
     frames = [pz.vision(os.path.join(tmp, n))[0] for n in sorted(x for x in os.listdir(tmp) if x.startswith("w") and x.endswith(".jpg"))]
     big = [[b for b in people if b["h"] >= 0.35] for people in frames]
@@ -71,6 +72,7 @@ def bodywipe(p, public, fps, tmp):
         b = min(big[i], key=lambda r: abs(r["x"] + r["w"] / 2 - prev) if prev is not None else -r["w"] * r["h"])
         prev = b["x"] + b["w"] / 2; track.append(b)
     if len(track) < 4: return None, "the person is visible for fewer than 4 frames"
+    if i0 + len(track) >= len(big): return None, "the person is still in frame 2.5 s after the cut — the wipe would snap open at its end; pick a cut where they walk out"
     move = (track[-1]["x"] + track[-1]["w"] / 2) - (track[0]["x"] + track[0]["w"] / 2)
     if abs(move) < 0.2: return None, f"the person moves only {abs(move):.0%} of the frame width — not a crossing"
     d = "left" if move < 0 else "right"
@@ -79,8 +81,9 @@ def bodywipe(p, public, fps, tmp):
     W = fz.W; far = W if d == "left" else 0; gone = -1 if d == "left" else W + 1
     note = ""
     if i0 > 0 or abs(xs[0] - far) > 0.25 * W: note = f" (they start {abs(xs[0] - far) / W:.0%} of the width in — cut {i0} frame(s) later or earlier so they enter on the cut)"
-    xs = [far] * min(3, i0 + 1) + xs + [gone] * 2       # start the reveal at the far edge, end it fully open
-    return {"xs": [round(x, 1) for x in xs[:75]], "dir": d}, f"{len(xs)} frames, walking {d}{note}"
+    xs = [far] * i0 + xs   # frame k of the path = frame k after the cut: the edge stays at the far side until they appear
+    xs = xs[:73] + [gone] * 2   # always end fully open
+    return {"xs": [round(x, 1) for x in xs], "dir": d}, f"{len(xs)} frames, walking {d}{note}"
 
 
 def main():

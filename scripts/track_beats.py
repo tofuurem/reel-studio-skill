@@ -94,6 +94,7 @@ def main():
         prev_db = max(bars[i - 1]["db"], bars[i - 2]["db"]); prev_k = max(bars[i - 1]["kick"], bars[i - 2]["kick"], 1e-6)
         score.append((bars[i]["db"] - prev_db + 6 * np.log2(max(bars[i]["kick"], 1e-6) / prev_k), bars[i]["t"]))
     drops = [t for _, t in sorted(score, reverse=True)[:4]]
+    if not drops and a.start is None: sys.exit(f"the track is too short to find a drop ({len(bars)} bars, need ≥ 3) — pass --start yourself")
     phrase = N["actionPhraseBars"]
     out = {"track": os.path.abspath(a.track), "bpm": round(60 / p, 2), "period": round(p, 5), "phase": round(ph, 4), "downbeat": int(down),
            "beats": [round(float(b), 3) for b in beats], "bars": bars, "drops": drops}

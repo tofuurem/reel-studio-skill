@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Look at the seams of a finished render, not only its frames: a sheet of every cut and a list of dead stretches.
 
-Usage: python3 -I motion_gate.py <project> <render.mp4> [--max 30]
+Usage: work/venv/bin/python -I motion_gate.py <project> <render.mp4> [--max 30]
 → work/qa/cuts_NN.jpg: one row per cut — frames cut−2, cut−1, cut, cut+1 (from work/cutlist.json, or work/shots.json for an
   action reel); the console lists each row with its seam kind. Read it as the viewer meets the cut: does the eye land where it was on
   the frame before (match, hand-off), does something move across the cut, does an effect seam come right after another?
@@ -30,6 +30,7 @@ def cuts_of(P):
 
 def main():
     ap = argparse.ArgumentParser(); ap.add_argument("project"); ap.add_argument("render"); ap.add_argument("--max", type=int, default=30)
+    ap.add_argument("--from", dest="start", type=int, default=0, help="first timeline frame of a part render (render_part.sh --frames=A-B → A)")
     a = ap.parse_args(); P = os.path.abspath(a.project); out = os.path.join(P, "work/qa"); os.makedirs(out, exist_ok=True)
     cuts, fps = cuts_of(P)
     import numpy as np
@@ -38,7 +39,7 @@ def main():
     raw = subprocess.run(["ffmpeg", "-v", "error", "-nostdin", "-i", a.render, "-vf", f"scale={w}:{h},format=gray", "-f", "rawvideo", "-"], capture_output=True).stdout
     fr = np.frombuffer(raw, dtype=np.uint8)[: len(raw) // (w * h) * w * h].reshape(-1, h, w).astype(np.float32)
     diff = np.abs(np.diff(fr, axis=0)).mean(axis=(1, 2)) if len(fr) > 1 else np.zeros(0)
-    cuts = [(c, k) for c, k in cuts if c + 1 < len(fr)]   # a render of a part (--frames) has only its own cuts
+    cuts = [(c - a.start, k) for c, k in cuts if c >= a.start and c - a.start + 1 < len(fr)]   # a part render: its own cuts, in its own frames
     still = diff < 0.25; runs, i = [], 0
     while i < len(still):
         if still[i]:
@@ -47,7 +48,7 @@ def main():
             if j - i > 18: runs.append((i, j))
             i = j
         else: i += 1
-    for i, j in runs: print(f"FROZEN {i / fps:6.2f}–{j / fps:6.2f} s ({j - i} frames) — a designed hold? if not, cut it or give it story")
+    for i, j in runs: print(f"FROZEN {(i + a.start) / fps:6.2f}–{(j + a.start) / fps:6.2f} s ({j - i} frames) — a designed hold? if not, cut it or give it story")
     # the cut sheet: 4 frames per cut, rows of cuts, pages of a.max rows
     th = 180 if vh > vw else 110; tw = round(th * vw / vh / 2) * 2; pages = 0
     for p0 in range(0, len(cuts), a.max):
@@ -58,7 +59,7 @@ def main():
         subprocess.run(["ffmpeg", "-v", "error", "-nostdin", "-y", "-i", a.render, "-vf", f"select='{expr}',scale={tw}:{th},tile=4x{len(rows)}:padding=3",
                         "-frames:v", "1", "-fps_mode", "passthrough", name], check=True)
         pages += 1
-        for n, (c, k) in enumerate(rows, p0 + 1): print(f"  cut {n:3d} @ {c / fps:7.2f} s  {k or 'plain'}")
+        for n, (c, k) in enumerate(rows, p0 + 1): print(f"  cut {n:3d} @ {(c + a.start) / fps:7.2f} s  {k or 'plain'}")
     fx = [k for _, k in cuts if k not in PLAIN]
     print(f"seams: {len(fx)} effect / {len(cuts)} cuts" + (f" ({', '.join(f'{x} ×{fx.count(x)}' for x in sorted(set(fx)))})" if fx else ""))
     print(f"MOTION_GATE_DONE {pages} cut sheet(s) in work/qa/, {len(runs)} frozen stretch(es)")

@@ -43,18 +43,27 @@ fi
 FR=$(ffprobe -v error -select_streams v:0 -count_packets -show_entries stream=nb_read_packets -of csv=p=0 "$RAW" | tr -dc 0-9)
 lufs(){ ffmpeg -hide_banner -nostdin -i "$1" -af ebur128 -f null - 2>&1 | grep -A1 "Integrated" | tail -1 | awk '{print $2}'; }
 I=$(lufs "$RAW")
-case "$I" in -[0-9]*) ;; *) echo "loudness measurement failed (I='$I'): is there an audio track?"; exit 1;; esac
+# no audio track, or nothing audible (an action reel whose shots carry no voice or SFX, a silent images-only reel): +50 dB of
+# gain would only amplify noise and the target check would always fail — keep the sound as it is and say so
+SILENT=0; case "$I" in -[0-9]*) python3 -c "import sys; sys.exit(0 if ($I) <= -60 else 1)" && SILENT=1;; *) SILENT=1;; esac
 mux(){  # $1 = gain dB → "$OUT.tmp.mp4"
   ffmpeg -hide_banner -loglevel error -nostdin -y -i "$RAW" -c:v copy -af "volume=${1}dB,aresample=192000,alimiter=limit=${LIM}:level=false:attack=5:release=50,aresample=48000" -c:a ${AAC} -b:a ${BR} -movflags +faststart "$OUT.tmp.mp4" || { echo "FINAL MUX FAILED"; rm -f "$OUT.tmp.mp4"; exit 1; }
 }
+if [ $SILENT = 1 ]; then
+  echo "WARNING: the render has no audible sound (I='$I' LUFS) — no loudness gain, no target check"
+  if [ -n "$(ffprobe -v error -select_streams a -show_entries stream=index -of csv=p=0 "$RAW")" ]; then G=0; mux 0
+  else G=0; ffmpeg -hide_banner -loglevel error -nostdin -y -i "$RAW" -c:v copy -an -movflags +faststart "$OUT.tmp.mp4" || { echo "FINAL MUX FAILED"; exit 1; }; fi
+  F=$I
+else
 G=$(python3 -c "print(round($T-($I),2))"); mux $G; F=$(lufs "$OUT.tmp.mp4")
 if python3 -c "import sys; sys.exit(0 if abs(($F)-($T)) > 0.2 else 1)"; then   # the limiter ate some level: one corrective pass
   G=$(python3 -c "print(round($G+($T)-($F),2))"); mux $G; F=$(lufs "$OUT.tmp.mp4"); fi
+fi
 FR2=$(ffprobe -v error -select_streams v:0 -count_packets -show_entries stream=nb_read_packets -of csv=p=0 "$OUT.tmp.mp4" | tr -dc 0-9)
 [ "$FR2" = "$FR" ] || { echo "FINAL MUX BROKEN: $FR2 frames instead of $FR"; rm -f "$OUT.tmp.mp4"; exit 1; }
 mv -f "$OUT.tmp.mp4" "$OUT"; rm -f "$RAW"
 echo "measured I=$I LUFS, gain=$G dB → final $F LUFS (target $T ±$TOL), $FR frames"
-python3 -c "import sys; sys.exit(0 if abs(($F)-($T)) <= $TOL else 1)" || { echo "LOUDNESS OFF TARGET: $F LUFS (target $T ±$TOL) — $OUT kept for inspection"; exit 1; }
+[ $SILENT = 1 ] || python3 -c "import sys; sys.exit(0 if abs(($F)-($T)) <= $TOL else 1)" || { echo "LOUDNESS OFF TARGET: $F LUFS (target $T ±$TOL) — $OUT kept for inspection"; exit 1; }
 PY="$P/work/venv/bin/python"; [ -x "$PY" ] || PY=python3   # needs numpy
 set +e; "$PY" -I "$SCRIPTS/glitch_scan.py" "$OUT" --expect "$FR"; GS=$?; set -e
 [ $GS -eq 2 ] && { echo "RENDER FAILED: the final file is broken (see above)"; exit 1; }

@@ -22,7 +22,7 @@ import { sfxLevel } from "./ui/Sfx";
  */
 export type Piece = { file: string; frames: number; matte?: string };
 export type Shot = {
-  note: string; frames: number; pieces: Piece[]; hold?: number; voice?: string; voiceAt?: number; voiceGain?: number;
+  note: string; frames: number; pieces: Piece[]; hold?: number; voice?: string; voiceFrames?: number; voiceAt?: number; voiceGain?: number;
   whip?: "left" | "right"; punch?: [number, number]; punchAt?: number; flashAt?: number; shake?: boolean; shakeAt?: number;
   caption?: string; captionAt?: number; captionTail?: number; battery?: number; sfx?: [number, string][];
   behind?: { title: string; kicker?: string; at?: number; until?: number; y?: number; x?: number; scale?: number };
@@ -51,12 +51,12 @@ const ShotView: React.FC<{ s: Shot }> = ({ s }) => {
   let scale = 1;
   if (s.crashAt !== undefined) {
     // crash zoom: a small pull back (the wind-up), then a fast ease-in push that lands ON crashAt and stops dead
-    const at = s.crashAt, [a0, a1] = s.punch ?? [1, 1.25];
+    const at = Math.min(s.crashAt, total - 1), [a0, a1] = s.punch ?? [1, 1.25]; // a stop past the shot's end would throw
     if (f < at - 6) scale = interpolate(f, [at - 13, at - 6], [a0, a0 * 0.965], { ...clamp, easing: Easing.out(Easing.quad) });
-    else scale = interpolate(f, [at - 6, at, total], [a0 * 0.965, a1, a1 + 0.02], { ...clamp, easing: Easing.in(Easing.cubic) });
+    else scale = interpolate(f, [at - 6, at, Math.max(total, at + 1)], [a0 * 0.965, a1, a1 + 0.02], { ...clamp, easing: Easing.in(Easing.cubic) });
   } else if (s.punch) {
     const at = s.punchAt ?? 0;
-    scale = interpolate(f, [at, at + 6, total], [s.punch[0], s.punch[1], s.punch[1] + 0.03], { ...clamp, easing: Easing.out(Easing.quad) });
+    scale = interpolate(f, [at, at + 6, Math.max(total, at + 7)], [s.punch[0], s.punch[1], s.punch[1] + 0.03], { ...clamp, easing: Easing.out(Easing.quad) });
   } else scale = interpolate(f, [0, total], [1.0, 1.04], clamp); // every shot drifts in a little: nothing sits still
   if (s.bump) scale *= 1 + N.bumpScale * interpolate(f, [s.bumpAt ?? 0, (s.bumpAt ?? 0) + N.bumpFrames], [0, 1], { ...clamp, easing: Easing.out(Easing.cubic) });
   // shake: e^(−t/τ), gone in ≈ 6 frames; > 20 px read as a glitch (was 22 px, linear over 10 frames)
@@ -217,7 +217,7 @@ export const Action: React.FC<{ withTrack?: boolean }> = ({ withTrack = false })
       ))}
       {SHOTS.map((s, i) =>
         s.voice ? (
-          <Sequence key={`a${i}`} name={`voice · ${s.note}`} from={START[i] + (s.voiceAt ?? 0)} durationInFrames={s.frames + 30}>
+          <Sequence key={`a${i}`} name={`voice · ${s.note}`} from={START[i] + (s.voiceAt ?? 0)} durationInFrames={Math.max(s.frames + 30, (s.voiceFrames ?? 0) + 2)}>
             <Audio src={staticFile(s.voice)} volume={s.voiceGain ?? 1} />
           </Sequence>
         ) : null,

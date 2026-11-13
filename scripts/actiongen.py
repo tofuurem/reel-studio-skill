@@ -37,7 +37,7 @@ work/shots.json, reel/src/shotsData.ts, work/action/sheet.jpg (the middle frame 
 sync table: every cut's frame and its distance to the nearest beat. Re-runs rebuild only shots whose spec changed.
 Prints ACTION_OK.
 """
-import glob, hashlib, json, os, subprocess, sys, tempfile
+import glob, hashlib, json, math, os, subprocess, sys, tempfile
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from common import N, atomic_json, canvas_size, clip_id, crop_expr, load_json, load_lut_map, lut_for, probe, title_place
 
@@ -188,7 +188,8 @@ class Project:
                 v = f"voice/v{i:02d}.wav"; vspec = hashlib.md5(json.dumps([f, s["voice"], VOICE_AF, N["dualmicAtten"]]).encode()).hexdigest()[:10]
                 if known_v.get(v) != vspec or not os.path.exists("reel/public/" + v) or (only and i in only):
                     self.voice(f, *s["voice"], "reel/public/" + v); print("voice", v, flush=True)
-            res.append({"n": i, "clip": s["clip"], "note": s["note"], "from": pos, "frames": n, "pieces": out, "voice": v, "vspec": vspec, "fx": s["fx"], "sync": s["sync"], "behind": s["behind"]})
+            res.append({"n": i, "clip": s["clip"], "note": s["note"], "from": pos, "frames": n, "pieces": out, "voice": v, "vspec": vspec, "fx": s["fx"], "sync": s["sync"], "behind": s["behind"],
+                        "vframes": math.ceil((s["voice"][1] - s["voice"][0]) * self.fps) if s["voice"] else None})
             pos += n + int(s["fx"].get("hold", 0) or 0) + int(s["fx"].get("black", 0) or 0)
         atomic_json({"fps": self.fps, "size": [self.W, self.H], "shots": res}, "work/shots.json")
         keep = {p[k] for s in res for p in s["pieces"] for k in ("file", "matte") if p.get(k)} | {s["voice"] for s in res if s["voice"]}
@@ -198,6 +199,10 @@ class Project:
                 rel = f"{d}/{fn}"
                 if rel not in keep and not fn.endswith(".mask.json") and (fn.endswith((".mp4", ".webm", ".wav"))): os.remove(f"reel/public/{rel}")
                 elif fn.endswith(".mask.json") and rel.replace(".mask.json", ".webm") not in keep: os.remove(f"reel/public/{rel}")
+        bad = [f"shot {s['n']} {s['note']!r}: {k}={s['fx'][k]} is outside its {s['frames']} frames" for s in res
+               for k in ("punchAt", "crashAt", "bumpAt", "rgbAt", "shakeAt", "flashAt", "captionAt", "voiceAt")
+               if s["fx"].get(k) is not None and not 0 <= int(s["fx"][k]) < s["frames"]]
+        if bad: sys.exit("ACCENT OUTSIDE ITS SHOT (the render would throw or show nothing):\n  " + "\n  ".join(bad))
         self.report(res, pos, end_frames); self.budget(res); self.motion_at_cuts(res); self.sheet(res)
         self.write_ts(res, end_frames, hook, out_ts)
         print("ACTION_OK", len(res), "shots,", pos, "+", end_frames, "=", pos + end_frames, "frames", f"({(pos + end_frames) / self.fps:.1f} s)")
@@ -287,7 +292,7 @@ class Project:
         shots = []
         for s in res:
             d = {"note": s["note"], "frames": s["frames"], "pieces": [{"file": p["file"], "frames": p["frames"], **({"matte": p["matte"]} if p.get("matte") else {})} for p in s["pieces"]]}
-            if s["voice"]: d["voice"] = s["voice"]
+            if s["voice"]: d["voice"] = s["voice"]; d["voiceFrames"] = s.get("vframes")
             if s["behind"]:
                 d["behind"] = {k: v for k, v in s["behind"].items() if k != "mode"}
                 mt_ = next((p["matte"] for p in s["pieces"] if p.get("matte")), None)

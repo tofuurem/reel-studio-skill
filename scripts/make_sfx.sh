@@ -37,7 +37,8 @@ for r in "$D"/*.raw.wav; do f=${r%.raw.wav}.wav; g=$(python3 -c "print(round(-6-
 if command -v earshot >/dev/null 2>&1 && [ "${SFX:-bank}" != synth ]; then
   rm -rf "$D/synth"   # the fresh synthesized set becomes the loudness reference
   EP=$(head -1 "$(command -v earshot)" | sed 's/^#!//')   # earshot's own python (uv tool env): numpy, soundfile, pyloudnorm
-  "$EP" -I "$(dirname "$0")/sfx_bank.py" "$P" | grep -v "^skip"
+  out=$("$EP" -I "$(dirname "$0")/sfx_bank.py" "$P" 2>&1) || { print -r -- "$out"; echo "SFX BANK FAILED — some sounds may still be the synthesized ones; SFX=synth $0 $P restores the full synthesized set"; exit 1; }
+  print -r -- "$out" | grep -v "^skip"
 else
   rm -rf "$D/synth" "$P/work/sfx_bank.json"   # a synthesized set: no stale bank report
   for f in "$D"/*.wav; do printf "%-12s %s dB peak\n" "$(basename "$f" .wav)" "$(peak "$f")"; done

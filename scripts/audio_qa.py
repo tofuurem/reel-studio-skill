@@ -82,7 +82,8 @@ def main():
     act = V.active_db(x); f = V.db(V.frame_power(x, 2400)); live = np.flatnonzero(f > -60)
     span = f[live[0]: live[-1] + 1] if len(live) else f
     rep["silentPct"] = round(100 * float(np.mean(span < -80)), 1) if len(span) else 0
-    rep["floorUnderSpeechDb"] = round(act - float(np.percentile(span[span > -80], 1)), 1)   # 1st percentile: a tight cut has few pauses, the 5th is quiet speech if act is not None and (span > -80).any() else None
+    # 1st percentile: a tight cut has few pauses, the 5th is quiet speech; a silent or near-silent mix has no floor to measure
+    rep["floorUnderSpeechDb"] = round(act - float(np.percentile(span[span > -80], 1)), 1) if act is not None and (span > -80).any() else None
     rep["overs"] = int(np.sum(np.abs(x) >= 0.999))
     if I is not None and abs(I - N["targetLufs"]) > N["lufsTolerance"] and a.project: warn.append(f"loudness {I} LUFS, target {N['targetLufs']}")
     if lra is not None and lra < N["lraMin"]: warn.append(f"loudness range {lra} LU < {N['lraMin']}: over-compressed (flat, lifts noise)")
