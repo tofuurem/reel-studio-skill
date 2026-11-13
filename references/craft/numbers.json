@@ -563,7 +563,7 @@
      "key": "snapJoin",
      "value": 0.8,
      "what": "a pause at least this long counts as a sentence edge even without .?!… (s)",
-     "why": "Parakeet / Whisper often drop the full stop of spoken Russian",
+     "why": "the recognizer often drops the full stop of spoken Russian",
      "used": "cut_from_transcript.py"
     },
     {
@@ -632,6 +632,20 @@
      "value": -30.0,
      "what": "camera sound under a picture beat (\"amb\"), active level (dBFS)",
      "why": "a dance or a ride in digital silence feels dead in a vlog without music",
+     "used": "dialogue.py"
+    },
+    {
+     "key": "ambRealtimeSpeed",
+     "value": 1.5,
+     "what": "a picture beat sped up this much or more plays its camera sound in real time, not time-stretched",
+     "why": "Halloween v5 (2026-11-09): rides at ×12–×15 played their wind time-stretched — a grinding texture the user heard as a broken frame",
+     "used": "dialogue.py"
+    },
+    {
+     "key": "dropoutMs",
+     "value": 40,
+     "what": "digital zeros inside a take longer than this (a radio-mic dropout, a voice window's edge) get room tone",
+     "why": "Halloween v5: c0081 had 0.5 s of zeros in the source (lav dropout) — a hole of digital silence at the start of the beach scene",
      "used": "dialogue.py"
     },
     {
@@ -822,6 +836,55 @@
      "what": "audio_qa warns below this (LU): over-compressed",
      "why": "the 2026-11-05 reel shipped at 2.6 LU",
      "used": "audio_qa.py"
+    },
+    {
+     "key": "expBelowDb",
+     "value": 22.0,
+     "what": "optional expander (work/voice_tune.json «expander»): frames this far under the speech level are pulled down (dB)",
+     "why": "a podcast edit ep. 1 (2026-11-13): room tails after words were the «эхо» the user heard; OFF unless the project asks",
+     "used": "voicelib.py"
+    },
+    {
+     "key": "expRatio",
+     "value": 2.5,
+     "what": "its downward ratio (1:x)",
+     "why": "",
+     "used": "voicelib.py"
+    },
+    {
+     "key": "expRangeDb",
+     "value": 15.0,
+     "what": "its deepest reduction (dB)",
+     "why": "deeper sounded gated",
+     "used": "voicelib.py"
+    },
+    {
+     "key": "notchMinDb",
+     "value": 3.0,
+     "what": "a resonance (1/12-octave bump over the 1-octave trend) this high gets a narrow cut with «notches»: \"auto\" (dB)",
+     "why": "a podcast edit: one host's voice boomed on 108 / 214 / 320 Hz (ep. 1) and 110 / 219 / 320 Hz (ep. 2) — narrow notches beat the broad 315 Hz cut",
+     "used": "voicelib.py (notch_plan), voice_probe.py"
+    },
+    {
+     "key": "notchMaxCut",
+     "value": 4.5,
+     "what": "deepest automatic notch (dB, Q 3)",
+     "why": "ep. 1's approved host EQ: −4.5 at 108 Hz",
+     "used": "voicelib.py (notch_plan), voice_probe.py"
+    },
+    {
+     "key": "levelerAmount",
+     "value": 0.6,
+     "what": "optional slow leveler inside a take (work/voice_tune.json «leveler»): share of the way to voiceTargetDb",
+     "why": "a podcast edit ep. 1: a voice that wandered 7 dB (distance to the mic) LRA 9.9 → 5.8; OFF unless the project asks",
+     "used": "dialogue.py, eq_test.py"
+    },
+    {
+     "key": "levelerMaxDb",
+     "value": 5.0,
+     "what": "its largest move (dB)",
+     "why": "more lifted breaths and room",
+     "used": "dialogue.py, eq_test.py"
     }
    ]
   },

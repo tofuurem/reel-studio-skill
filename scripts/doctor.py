@@ -46,7 +46,7 @@ def nxt(step): nexts.append(step)
 for tool in ("ffmpeg", "ffprobe", "node", "zsh", "uv"):
     if not shutil.which(tool): add("ERR" if tool != "uv" else "WARN", "env", f"{tool} not found — python3 -I {os.path.dirname(os.path.abspath(__file__))}/deps.py --install")
 APPLE_SILICON = sys.platform == "darwin" and platform.machine() == "arm64"
-for v in ("venv", "dfvenv") + (("pkvenv",) if APPLE_SILICON else ()):   # Parakeet (MLX) exists on Apple Silicon only
+for v in ("venv", "dfvenv", "gigvenv"):   # gigvenv = GigaAM, Russian speech (transcribe.py --lang ru, transcribe_gigaam.py); Whisper lives in venv
     if not os.path.exists(pj("work", v, "bin", "python")): add("WARN", "env", f"work/{v} missing — setup_env.sh {P}")
 py = pj("work/venv/bin/python") if os.path.exists(pj("work/venv/bin/python")) else "python3"
 if subprocess.run([py, "-I", "-c", "import numpy"], capture_output=True).returncode: add("ERR", "env", "numpy missing (glitch_scan.py) — setup_env.sh")
@@ -245,11 +245,11 @@ if cl and not silent and os.path.isdir(src_dir):
     else:
         dj = load_json(pj("work/voice/dialogue.json"), {}) or {}
         vfiles = glob.glob(pj("work/voice/out/*_DeepFilterNet3.wav"))
-        if mt(dwav) < max([mt(cl_path), mt(pj("work/bleeps.json"))] + [mt(v) for v in vfiles]):
-            add("ERR", "audio", "dialogue.wav is older than the cut list / the restored voice / bleeps.json — it would play the old cut"); nxt("work/dfvenv/bin/python -I $S/dialogue.py <project>")
+        if mt(dwav) < max([mt(cl_path), mt(pj("work/bleeps.json")), mt(pj("work/voice_tune.json"))] + [mt(v) for v in vfiles]):
+            add("ERR", "audio", f"{os.path.basename(dwav)} is older than the cut list / the restored voice / bleeps.json / voice_tune.json — it would play the old cut"); nxt("work/dfvenv/bin/python -I $S/dialogue.py <project>")
         else:
             o = (dj.get("chain") or {}).get("out") or {}
-            add("OK", "audio", f"dialogue stem: {len(dj.get('cuts', []))} crossfaded cuts, {dj.get('bleeps', 0)} bleeps, LRA {o.get('lra')} LU")
+            add("OK", "audio", f"dialogue stem: {len(dj.get('cuts', []))} crossfaded cuts, {dj.get('bleeps', 0)} bleeps, LRA {o.get('lra')} LU" + (f"; voice_tune {sorted(dj['tune'])}" if dj.get("tune") else ""))
         if reel_txt and "<Dialogue" not in reel_txt:
             add("ERR", "audio", "Reel.tsx does not place <Dialogue /> while Clip mutes the proxies — the reel would have no voice"); nxt("python3 -I work/gen_reel.py (reelgen.write adds it)")
 if not stem_on:

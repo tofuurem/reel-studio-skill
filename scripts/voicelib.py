@@ -51,6 +51,34 @@ def write(path, x, subtype="FLOAT"):
     os.replace(tmp, path)
 
 
+def df_run(df, wav, out_dir, atten=None, chunk=120.0, overlap=2.0):
+    """DeepFilterNet over `wav` → <out_dir>/<stem>_DeepFilterNet3.wav (what `deepFilter` writes). DeepFilterNet holds ≈ 1 GB per
+    minute of audio in RAM (measured: 1 min 1.9 GB, 3 min 4.2 GB, 10 min > 11 GB — a 10-minute raw take froze the Mac), so a
+    long file goes through in `chunk`-second pieces, one process each, with `overlap` seconds on both sides crossfaded linearly
+    (each piece's unreliable warm-up edge sits where its weight is 0): peak ≈ 3.5 GB for any length."""
+    import soundfile as sf
+    stem = os.path.splitext(os.path.basename(wav))[0]; final = os.path.join(out_dir, stem + "_DeepFilterNet3.wav")
+    args = ["-a", str(atten)] if atten is not None else []
+    def one(f):
+        r = subprocess.run([df, f, *args, "-o", out_dir], capture_output=True, text=True)
+        if r.returncode: sys.exit(f"DeepFilterNet failed ({os.path.basename(f)}): {r.stderr[-600:]}")
+    x, sr = sf.read(wav, dtype="float32"); n = len(x); step, ov = int(chunk * sr), int(overlap * sr)
+    if x.ndim > 1 or n <= step + 2 * ov: one(wav); return final
+    out = np.zeros(n, np.float64); starts = list(range(0, n, step))
+    for i, a0 in enumerate(starts):
+        p0, p1 = max(0, a0 - ov), min(n, a0 + step + ov); piece = os.path.join(out_dir, f"{stem}_p{i:03d}.wav")
+        sf.write(piece, x[p0:p1], sr, subtype="FLOAT")
+        one(piece)
+        pout = os.path.join(out_dir, f"{stem}_p{i:03d}_DeepFilterNet3.wav")
+        y = fit(sf.read(pout, dtype="float64")[0], p1 - p0); w = np.ones(len(y))
+        if i > 0: w[:min(2 * ov, len(y))] = np.linspace(0, 1, min(2 * ov, len(y)))
+        if i < len(starts) - 1: w[-2 * ov:] = np.minimum(w[-2 * ov:], np.linspace(1, 0, min(2 * ov, len(y))))
+        out[p0:p1] += y * w
+        os.remove(piece); os.remove(pout)
+    sf.write(final, out, sr, subtype="PCM_16")
+    return final
+
+
 def fit(y, n):
     return y[:n] if len(y) >= n else np.pad(y, (0, n - len(y)))
 
@@ -101,8 +129,10 @@ def analyse(x):
             "peakDb": round(pk, 1), "clipSamples": int(np.sum(np.abs(x) >= 0.985)), "silentFrac": round(float(np.mean(f < -80)) if len(f) else 0.0, 3)}
 
 
-def ltas(x, active=True, nfft=4096):
-    """1/3-octave band levels (dB, LTASS bands) over the active-speech frames (power within 15 dB of the speech level)."""
+def ltas(x, active=True, nfft=4096, exact=False):
+    """1/3-octave band levels (dB, LTASS bands) over the active-speech frames (power within 15 dB of the speech level).
+    Default: ≤ 1500 sampled frames — fine for «where is this voice off the norm» (tone_plan). exact=True sums EVERY active
+    frame: use it to tell whether a voice CHANGED by 1–2 dB (sampling swings ±2 dB at 5–8 kHz on the same audio)."""
     n = len(x) // nfft
     if n < 4: return None
     fr = x[: n * nfft].reshape(n, nfft)
@@ -112,8 +142,14 @@ def ltas(x, active=True, nfft=4096):
         if sp is None: return None
         keep = db(p) > sp - 15
         if keep.sum() < 4: return None
-    idx = np.flatnonzero(keep); idx = idx[np.linspace(0, len(idx) - 1, min(len(idx), 1500)).astype(int)]   # bounded memory on long takes
-    spec = (np.abs(np.fft.rfft(fr[idx] * np.hanning(nfft), axis=1)) ** 2).mean(0)
+    idx = np.flatnonzero(keep)
+    if exact:
+        spec = np.zeros(nfft // 2 + 1)
+        for i in range(0, len(idx), 1000): spec += (np.abs(np.fft.rfft(fr[idx[i:i + 1000]] * np.hanning(nfft), axis=1)) ** 2).sum(0)
+        spec /= max(1, len(idx))
+    else:
+        idx = idx[np.linspace(0, len(idx) - 1, min(len(idx), 1500)).astype(int)]   # bounded memory on long takes
+        spec = (np.abs(np.fft.rfft(fr[idx] * np.hanning(nfft), axis=1)) ** 2).mean(0)
     fq = np.fft.rfftfreq(nfft, 1 / SR); out = {}
     for b in BANDS:
         m = (fq >= b / 2 ** (1 / 6)) & (fq < b * 2 ** (1 / 6))
@@ -128,8 +164,12 @@ def transfer(before, after):
     b = before[: k * nfft].reshape(k, nfft); a = after[: k * nfft].reshape(k, nfft)
     sp = active_db(before[:n]); keep = db((b ** 2).mean(1)) > (sp if sp is not None else -40) - 10
     if keep.sum() < 4: return {}
-    w = np.hanning(nfft); idx = np.flatnonzero(keep); idx = idx[np.linspace(0, len(idx) - 1, min(len(idx), 1500)).astype(int)]
-    sb = (np.abs(np.fft.rfft(b[idx] * w, axis=1)) ** 2).mean(0); sa = (np.abs(np.fft.rfft(a[idx] * w, axis=1)) ** 2).mean(0)
+    # EVERY active frame, in chunks (bounded memory). The old ≤ 1500-frame sample swung ±2 dB at 5–8 kHz on the SAME audio
+    # (sibilants are rare) — false «band moved > 2 dB» warnings and missed real ones (a podcast edit ep. 1, 2026-11-13)
+    w = np.hanning(nfft); idx = np.flatnonzero(keep); sb = np.zeros(nfft // 2 + 1); sa = np.zeros(nfft // 2 + 1)
+    for i in range(0, len(idx), 1000):
+        j = idx[i:i + 1000]
+        sb += (np.abs(np.fft.rfft(b[j] * w, axis=1)) ** 2).sum(0); sa += (np.abs(np.fft.rfft(a[j] * w, axis=1)) ** 2).sum(0)
     fq = np.fft.rfftfreq(nfft, 1 / SR); out = {}
     for c in BANDS + [16000]:
         m = (fq >= c / 2 ** (1 / 6)) & (fq < c * 2 ** (1 / 6))
@@ -233,15 +273,25 @@ def tone_plan(x):
 
 # ---------------------------------------------------------------- the chain
 
-def voice_chain(x, level_db=None):
+def voice_chain(x, level_db=None, tune=None):
     """The ONE processing chain of the dialogue (dialogue.py runs it over the whole assembled stem):
-    high-pass + phase rotator → corrective cuts (mud/box) → one soft-knee compressor → presence/air → de-esser → static gain to the stem
-    loudness (numbers.json stemLufs) → look-ahead peak limiter. `level_db` = the speech level the leveling aimed at."""
-    rep = {}
+    high-pass + phase rotator → [expander] → corrective cuts (mud/box) → [resonance notches / extra EQ] → one soft-knee
+    compressor → presence/air → de-esser → static gain to the stem loudness (numbers.json stemLufs) → look-ahead peak limiter.
+    `level_db` = the speech level the leveling aimed at. `tune` = the project's work/voice_tune.json (all optional, all OFF
+    by default, so a project without it sounds exactly as before): {"hpf": "<ffmpeg high-pass>", "expander": true | {below,
+    ratio, range_db}, "notches": "auto" | "<ffmpeg equalizers>", "extraEq": "<ffmpeg filters>"}."""
+    rep = {}; tune = tune or {}
     lvl = N["voiceTargetDb"] if level_db is None else level_db
-    x = ffilter(x, f"highpass=f={N['hpfHz']}:poles=2," + ",".join([f"allpass=f={N['phaseRotHz']}:width_type=q:w=0.7"] * 4))
+    x = ffilter(x, (tune.get("hpf") or f"highpass=f={N['hpfHz']}:poles=2") + "," + ",".join([f"allpass=f={N['phaseRotHz']}:width_type=q:w=0.7"] * 4))
+    if tune.get("expander"):
+        ex = tune["expander"] if isinstance(tune["expander"], dict) else {}
+        x, rep["expander"] = expand(x, ex.get("below", N["expBelowDb"]), ex.get("ratio", N["expRatio"]), ex.get("range_db", N["expRangeDb"]))
     plan = tone_plan(x); rep["eq"] = plan.get("moves", {}); rep["ltasDev"] = plan["dev"]
     if plan["cuts"]: x = ffilter(x, ",".join(plan["cuts"]))
+    notches = tune.get("notches")
+    if notches == "auto": notches, rep["resonances"] = notch_plan(x)
+    if notches: x = ffilter(x, notches); rep["notches"] = notches
+    if tune.get("extraEq"): x = ffilter(x, tune["extraEq"]); rep["extraEq"] = tune["extraEq"]
     x, rep["comp"] = compress(x, lvl + N["compOverDb"], N["compRatio"], N["compKneeDb"], N["compAttackMs"], N["compReleaseMs"], hop=int(N["compWindowMs"] / 1000 * SR))
     if plan["boosts"]: x = ffilter(x, ",".join(plan["boosts"]))
     sp = active_db(x)
@@ -251,6 +301,81 @@ def voice_chain(x, level_db=None):
     x, rep["limit"] = peak_limit(x, N["stemPeakDb"])
     I, lra, tp = ebur128(x); rep["out"] = {"lufs": I, "lra": lra, "truePeak": tp}
     return x, rep
+
+
+# ---------------------------------------------------------------- optional voice tools (from a podcast edit, 2026-11-13)
+
+def expand(x, below=22.0, ratio=2.5, range_db=15.0, hop=HOP):
+    """Downward expander keyed by the voice's OWN level: frames more than `below` dB under the speech are pulled down
+    (1:ratio, at most range_db) — room tails («эхо») and cleanup leftovers between words. Opens in ≈ 5 ms with a 20 ms
+    look-ahead, closes in ≈ 60 ms. Podcast ep. 1: with full DeepFilterNet it removed what the user heard as echo."""
+    sp = active_db(x)
+    if sp is None: return x, {}
+    L = db(frame_power(x, hop)); thr = sp - below
+    gr = np.clip((thr - L) * (ratio - 1), 0, range_db)
+    gr = np.minimum(gr, np.minimum(np.roll(gr, -1), np.roll(gr, -2)))
+    gr = smooth_gr(gr, hop, 60.0, 5.0); live = L > sp - 40
+    return apply_db(x, gr, hop), {"thrDb": round(thr, 1), "activePct": round(100 * float(np.mean(gr[live] > 1)) if live.any() else 0, 1)}
+
+
+def leveler(x, target, amount=0.6, max_db=5.0, win_ms=400, att_ms=250, rel_ms=900, hop=HOP):
+    """Slow speech leveler (adaptive AGC inside a take): the speech level around each moment (400 ms, active frames only) is
+    pulled `amount` of the way to `target` (≤ ±max_db); 0.25 s down / 0.9 s up, HELD through pauses (no noise pumping).
+    Podcast ep. 1: a voice that wandered 7 dB (distance to the mic) went from LRA 9.9 to 5.8 LU."""
+    L = db(frame_power(x, hop)); act = L > target - 20
+    k = max(1, int(win_ms / 10)); ker = np.ones(k)
+    pw = np.convolve(np.where(act, 10 ** (L / 10), 0.0), ker, "same"); na = np.convolve(act.astype(float), ker, "same")
+    env = 10 * np.log10(pw / np.maximum(na, 1e-9) + 1e-20)
+    want = np.clip((target - env) * amount, -max_db, max_db)
+    g = np.empty_like(want); cur = 0.0; a_dn = 1 - np.exp(-10 / att_ms); a_up = 1 - np.exp(-10 / rel_ms)
+    for i in range(len(want)):
+        if na[i] >= 0.3 * k:
+            d = want[i] - cur; cur += (a_dn if d < 0 else a_up) * d
+        g[i] = cur
+    live = na >= 0.3 * k
+    st = {"meanAbsDb": round(float(np.mean(np.abs(g[live]))), 1), "p5": round(float(np.percentile(g[live], 5)), 1),
+          "p95": round(float(np.percentile(g[live], 95)), 1)} if live.any() else {}
+    return apply_db(x, g, hop, sign=1), st
+
+
+def resonances(x, lo=60, hi=1200, nfft=16384):
+    """Narrow bumps of a voice: 1/12-octave level over the 1-octave trend, on the louder 60 % of frames.
+    → [(Hz, dB over the trend)] per range 60–200 / 200–500 / 500–1200 Hz. A podcast edit: the same speaker (one host) showed
+    108 / 214 / 320 Hz on one mic and 61 (room) / 110 / 219 / 320 Hz on another — «гудит» lives on a few narrow peaks."""
+    k = len(x) // nfft
+    if k < 4: return []
+    F = np.asarray(x[: k * nfft], dtype=np.float64).reshape(k, nfft); p = (F ** 2).mean(1); keep = p > np.percentile(p, 40)
+    S = np.zeros(nfft // 2 + 1); idx = np.flatnonzero(keep)
+    for i in range(0, len(idx), 200): S += (np.abs(np.fft.rfft(F[idx[i:i + 200]] * np.hanning(nfft), axis=1)) ** 2).sum(0)
+    fq = np.fft.rfftfreq(nfft, 1 / SR); d = 10 * np.log10(S + 1e-20); sel = (fq > lo) & (fq < hi); fs = fq[sel]
+    def smooth(frac):
+        out = np.empty(sel.sum())
+        for i, f0 in enumerate(fs):
+            m = (fq >= f0 / 2 ** (frac / 2)) & (fq <= f0 * 2 ** (frac / 2)); out[i] = 10 * np.log10(np.mean(10 ** (d[m] / 10)))
+        return out
+    r = smooth(1 / 12) - smooth(1.0); out = []
+    for a, b in ((60, 200), (200, 500), (500, 1200)):
+        m = (fs >= a) & (fs < b)
+        if m.any(): i = int(np.argmax(r[m])); out.append((int(fs[m][i]), round(float(r[m][i]), 1)))
+    return out
+
+
+def notch_plan(x, min_db=None, max_cut=None):
+    """Narrow cuts (Q 3) on the resonances that stick out by ≥ numbers.json notchMinDb, depth = the bump (≤ notchMaxCut).
+    Narrow notches beat broad shelves: a wide cut thins the voice (a podcast edit, one host: centroid 396 → 693 Hz with
+    108 / 214 Hz notches). Returns (ffmpeg filter string or "", the measured resonances)."""
+    min_db = N["notchMinDb"] if min_db is None else min_db; max_cut = N["notchMaxCut"] if max_cut is None else max_cut
+    res = resonances(x); eqs = [f"equalizer=f={f}:t=q:w=3:g={-min(b, max_cut):.1f}" for f, b in res if b >= min_db and f < 500]
+    return ",".join(eqs), res
+
+
+def centroid(x, nfft=2048):
+    """Spectral centroid of the louder 40 % of frames (Hz): a quick «dark / boomy vs thin» number (male voice ≈ 600–700 Hz)."""
+    k = len(x) // nfft
+    if k < 2: return 0.0
+    S = np.abs(np.fft.rfft(np.asarray(x[: k * nfft], dtype=np.float64).reshape(k, nfft) * np.hanning(nfft), axis=1)) ** 2
+    fq = np.fft.rfftfreq(nfft, 1 / SR); keep = S.sum(1) > np.percentile(S.sum(1), 60)
+    return float((S[keep] @ fq).sum() / max(S[keep].sum(), EPS))
 
 
 # ---------------------------------------------------------------- room tone

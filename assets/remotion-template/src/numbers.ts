@@ -93,6 +93,8 @@ export const N = {
   voiceSegHi: -19.0, // a speech segment louder than this is lowered (dBFS)
   voiceSegMax: 4.0, // most a single segment is moved (dB)
   ambDb: -30.0, // camera sound under a picture beat ("amb"), active level (dBFS)
+  ambRealtimeSpeed: 1.5, // a picture beat sped up this much or more plays its camera sound in real time, not time-stretched
+  dropoutMs: 40, // digital zeros inside a take longer than this (a radio-mic dropout, a voice window's edge) get room tone
   rawDb: -22.0, // camera sound instead of the voice ("raw") (dBFS)
   declipMinSamples: 20, // samples at |x| ≥ 0.985 before a source counts as clipped and gets adeclip
   noiseTargetDb: 48, // how far under the speech the residual noise should sit after cleanup (dB); DeepFilterNet's limit = this − the source SNR
@@ -120,6 +122,13 @@ export const N = {
   aacBitrate: "320k", // final AAC bitrate (the only lossy encode of the sound; Remotion renders PCM)
   lraMax: 9.0, // audio_qa warns above this loudness range of the final mix (LU)
   lraMin: 3.0, // audio_qa warns below this (LU): over-compressed
+  expBelowDb: 22.0, // optional expander (work/voice_tune.json «expander»): frames this far under the speech level are pulled down (dB)
+  expRatio: 2.5, // its downward ratio (1:x)
+  expRangeDb: 15.0, // its deepest reduction (dB)
+  notchMinDb: 3.0, // a resonance (1/12-octave bump over the 1-octave trend) this high gets a narrow cut with «notches»: "auto" (dB)
+  notchMaxCut: 4.5, // deepest automatic notch (dB, Q 3)
+  levelerAmount: 0.6, // optional slow leveler inside a take (work/voice_tune.json «leveler»): share of the way to voiceTargetDb
+  levelerMaxDb: 5.0, // its largest move (dB)
   // Picture: night lift, action pieces
   nightStrong: 20, // mean luma (0–255) below which a clip gets the strong shadow lift
   nightMedium: 40, // … the medium lift

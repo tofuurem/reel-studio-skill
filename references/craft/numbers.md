@@ -111,7 +111,7 @@ Generated from `numbers.json` by `scripts/numbers_gen.py` — edit the JSON, not
 |---|---|---|---|---|
 | `snapBack` | 6.0 | a range that starts inside a sentence grows back to its start, at most this many seconds | Halloween vlog v2: «фразы обрезанные посередине» — a line that starts mid-thought reads as a mistake | cut_from_transcript.py |
 | `snapFwd` | 4.5 | a range that ends inside a sentence grows forward to its end, at most this many seconds | same; forward is shorter — the punchline is usually already in | cut_from_transcript.py |
-| `snapJoin` | 0.8 | a pause at least this long counts as a sentence edge even without .?!… (s) | Parakeet / Whisper often drop the full stop of spoken Russian | cut_from_transcript.py |
+| `snapJoin` | 0.8 | a pause at least this long counts as a sentence edge even without .?!… (s) | the recognizer often drops the full stop of spoken Russian | cut_from_transcript.py |
 | `splitWindowSec` | 25 | ranges of one take further apart than this get their own alias proxy (s) | make_proxies encodes one window per clip: c0080 was 509 s of 4K for 70 s used | cut_from_transcript.py → make_proxies.py |
 
 **Voice chain (voice_clean.py restores each source → dialogue.py builds and processes one dialogue stem → render.sh masters)**
@@ -126,6 +126,8 @@ Generated from `numbers.json` by `scripts/numbers_gen.py` — edit the JSON, not
 | `voiceSegHi` | -19.0 | a speech segment louder than this is lowered (dBFS) | a shout inside a calm clip | dialogue.py |
 | `voiceSegMax` | 4.0 | most a single segment is moved (dB) | ±10 dB per segment pumped the noise floor | dialogue.py |
 | `ambDb` | -30.0 | camera sound under a picture beat ("amb"), active level (dBFS) | a dance or a ride in digital silence feels dead in a vlog without music | dialogue.py |
+| `ambRealtimeSpeed` | 1.5 | a picture beat sped up this much or more plays its camera sound in real time, not time-stretched | Halloween v5 (2026-11-09): rides at ×12–×15 played their wind time-stretched — a grinding texture the user heard as a broken frame | dialogue.py |
+| `dropoutMs` | 40 | digital zeros inside a take longer than this (a radio-mic dropout, a voice window's edge) get room tone | Halloween v5: c0081 had 0.5 s of zeros in the source (lav dropout) — a hole of digital silence at the start of the beach scene | dialogue.py |
 | `rawDb` | -22.0 | camera sound instead of the voice ("raw") (dBFS) | DeepFilterNet swallowed a voice inside a costume | dialogue.py |
 | `declipMinSamples` | 20 | samples at |x| ≥ 0.985 before a source counts as clipped and gets adeclip | adeclip on clean audio still rewrote the samples (diff up to −34 dBFS, 2026-11-07 audit) | voice_clean.py, dualmic.py |
 | `noiseTargetDb` | 48 | how far under the speech the residual noise should sit after cleanup (dB); DeepFilterNet's limit = this − the source SNR | full-strength DeepFilterNet turned every pause into digital silence (−69 dB) and cut −3 dB at 3.15 kHz out of the voice; a floor ≈ 48 dB down is inaudible under −16 LUFS speech and keeps the pauses natural | voice_clean.py |
@@ -153,6 +155,13 @@ Generated from `numbers.json` by `scripts/numbers_gen.py` — edit the JSON, not
 | `aacBitrate` | 320k | final AAC bitrate (the only lossy encode of the sound; Remotion renders PCM) | proxies 192k → Remotion 320k → final 192k = three extra generations on top of the camera's AAC | render.sh |
 | `lraMax` | 9.0 | audio_qa warns above this loudness range of the final mix (LU) |  | audio_qa.py |
 | `lraMin` | 3.0 | audio_qa warns below this (LU): over-compressed | the 2026-11-05 reel shipped at 2.6 LU | audio_qa.py |
+| `expBelowDb` | 22.0 | optional expander (work/voice_tune.json «expander»): frames this far under the speech level are pulled down (dB) | a podcast edit ep. 1 (2026-11-13): room tails after words were the «эхо» the user heard; OFF unless the project asks | voicelib.py |
+| `expRatio` | 2.5 | its downward ratio (1:x) |  | voicelib.py |
+| `expRangeDb` | 15.0 | its deepest reduction (dB) | deeper sounded gated | voicelib.py |
+| `notchMinDb` | 3.0 | a resonance (1/12-octave bump over the 1-octave trend) this high gets a narrow cut with «notches»: "auto" (dB) | a podcast edit: one host's voice boomed on 108 / 214 / 320 Hz (ep. 1) and 110 / 219 / 320 Hz (ep. 2) — narrow notches beat the broad 315 Hz cut | voicelib.py (notch_plan), voice_probe.py |
+| `notchMaxCut` | 4.5 | deepest automatic notch (dB, Q 3) | ep. 1's approved host EQ: −4.5 at 108 Hz | voicelib.py (notch_plan), voice_probe.py |
+| `levelerAmount` | 0.6 | optional slow leveler inside a take (work/voice_tune.json «leveler»): share of the way to voiceTargetDb | a podcast edit ep. 1: a voice that wandered 7 dB (distance to the mic) LRA 9.9 → 5.8; OFF unless the project asks | dialogue.py, eq_test.py |
+| `levelerMaxDb` | 5.0 | its largest move (dB) | more lifted breaths and room | dialogue.py, eq_test.py |
 
 **Picture: night lift, action pieces**
 
