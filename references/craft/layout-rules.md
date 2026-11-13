@@ -16,7 +16,7 @@ A corner HUD (timer, step, progress) sits top-left at `wideMargin`; check it aga
 ## People-aware crop (`work/people_zones.json`, before the proxies)
 - A 16:9 camera clip on a 9:16 canvas keeps 0.316 of its width. `people_zones.py` decides where, per segment, from Apple Vision boxes on the source: the main person plus the big ones next to them that fit (`N.peopleFitMargin`, `N.peopleNearArea`); the main person is sticky (`N.peopleStickyArea`) so two people who do not fit together do not trade the crop; when the main person alone is wider than the crop, their face decides.
 - A subject that moves less than `N.peoplePanMin` of the width gets one fixed centre; a moving one a smoothed pan (`N.peopleSmoothSec`, at most `N.peoplePanSpeed` widths per second, a key every `N.peopleKeyEvery` s). make_proxies writes it as one ffmpeg crop expression per proxy.
-- Vision does not see costumes as people (a banana suit), finds nobody in the dark, and «biggest» is not always «the action» (a seated man in front of the one waving): read the sheet, set `cropX` for those ranges.
+- Vision does not see costumes as people, finds nobody in the dark, and «biggest» is not always «the action» (a seated man in front of the one waving): read the sheet, set `cropX` for those ranges.
 - Only cut lists made here (plan.json, silent): a CapCut draft keeps the framing the user set in CapCut.
 - face_zones.py runs on the cropped proxies, so cards and captions follow the new framing automatically.
 
@@ -36,7 +36,7 @@ The kit, its props and conventions: `craft/scenes.md` and the template's `src/RE
 - Chapter structure: cold open (the hook) → `Chapter`s → a quiet `EndCard` (a CTA only when asked).
 
 
-> No `backdrop-filter` and no `mix-blend-mode` on any component — they cause single-frame dropouts in the render (`pitfalls/render-and-qa.md`). Panels are solid `colors.panel`.
+> No `backdrop-filter` / `mix-blend-mode`: `pitfalls/render-and-qa.md`. Panels are solid `colors.panel`.
 
 ## Boards (voiceover stretches and close-up heads)
 - One board per thought, 2–6 elements, each entering on its spoken word; something is on screen from the first frame (an empty panel ≥ 2 s reads as broken).

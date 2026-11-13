@@ -1,13 +1,11 @@
 # Seams and accents: how two shots meet
 
-Read before giving any cut a transition (calm reels, vlogs) and before adding accents to an action reel. Built on
-2026-11-09 from HeyGen HyperFrames, video-shotcraft and motionmaxxing (Apache-2.0, rules rewritten in our words), OpenMontage
-(AGPL — ideas only) and Remotion's own packages; everything here was rendered on the user's footage before it went in.
+Read before giving any cut a transition (calm reels, vlogs) and before adding accents to an action reel. This file owns
+the seam kinds, the alternation rule and the seam budget. Sources: HeyGen HyperFrames, video-shotcraft and motionmaxxing
+(Apache-2.0, rules rewritten in our words), OpenMontage (AGPL — ideas only) and Remotion's own packages.
 Numbers: `numbers.md` «Seams». How a scene moves inside itself: `motion-design.md`.
 
-## 0. The rule: alternate (the user, 2026-11-09 — non-negotiable)
-
-«Слишком много переходов, вжух на каждое действие, миллионы RGB-сдвигов — получится ужасное видео. Видео нужно чередовать.»
+## 0. The rule: alternate (non-negotiable)
 
 - **Most cuts are plain**: the 7-frame dissolve on talking heads, a hard cut on the beat in an action reel. An effect seam is
   the exception that marks something — a new place, a new topic, the payoff, the drop. Write that reason in the plan note

@@ -10,12 +10,12 @@ picture, sound, music, text, people, faces and logos never go into the user's vi
    recording) and drop it into `assets/refs/`. Never pass their browser cookies or passwords to yt-dlp. YouTube needs a
    working connection to Google (a VPN where it is throttled); an SSL «EOF» from yt-dlp while curl works is that.
 2. **Measure.** `work/venv/bin/python -I $S/ref_analyze.py <project> assets/refs/<name>.mp4` → `work/refs/<name>/ref.md`,
-   `ref.json`, `sheet.jpg` (≈ 20 s per minute on an M-series Mac). It lists every shot (hard cuts, short dissolves and jump
-   cuts — 43 of 44 dissolved jump cuts found on the user's own reel, plus the cutaways), the shot lengths, the hook, the
+   `ref.json`, `sheet.jpg` (≈ 20 s per minute on an M-series Mac). It lists every shot (hard cuts, short dissolves, dissolved jump
+   cuts and the cutaways), the shot lengths, the hook, the
    framing per shot (Apple Vision faces), the on-screen text (OCR, ru + en): where the caption rail sits, letter height,
    words and lines per page, page length, ALL CAPS — and the loudness. Linux: no Vision → framing and text are skipped.
 3. **Look.** Open `sheet.jpg` and watch the reference once at speed. Name what the numbers cannot: the transition kinds
-   (a whip, a zoom, a hand-off — count them, `motion-design.md` «Seams»), the graphics (cards, stickers, a progress bar),
+   (a whip, a zoom, a hand-off — count them against `transitions.md` §1), the graphics (cards, stickers, a progress bar),
    the colour (warm / cold / contrasty), the music's role, the first sentence's shape.
 4. **Write a style brief** into `NOTES.md` — 5–8 lines, each «reference → our knob»:
 

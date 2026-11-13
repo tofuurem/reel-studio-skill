@@ -28,7 +28,7 @@ body += [
          "langColor": js("colors.accent2")},
         {"at": R.L(R.fw("ffmpeg", after=r0), r0), "owner": "FFmpeg", "name": "FFmpeg", "stars": 66723, "lang": "C"},
     ]), "repos"),
-    rg.seq(R.seg(0) + 20, R.seg(0) + 110, tag("LowerThird", name="Алексей", kicker="разработчик · lofiroom", at=0), "lower third"),
+    rg.seq(R.seg(0) + 20, R.seg(0) + 110, tag("LowerThird", name="Алексей", kicker="разработчик · канал", at=0), "lower third"),
 ]
 ```
 Code goes in as plain Python strings (`before`, `after`, `code`): `tag()` puts any multi-line string into braces (`{"…\n…"}`) — a plain JSX attribute would keep `\n` as a backslash and an n.

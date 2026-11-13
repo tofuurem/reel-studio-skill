@@ -5,13 +5,11 @@ music level — do not rebuild and render the whole reel per idea. Make one shor
 announced by beeps (and a numbered card in a video), send it, ask «1, 2 или 3?». The user decides; you write down the
 decision (NOTES.md, `work/voice_tune.json`, plan.json) and only then rebuild.
 
-Learned on a podcast edit (episodes 1–2, 2026-11): the user chose the voices, the stingers, the jingle and the guest's mic
-from such files on the phone. Two lessons came with it:
 - **Version 1 is always «как сейчас»** — what they already heard. Nothing they heard is replaced without an A/B.
-- **A variant that wins in isolation can lose in context.** Ep. 3: the guest's voice variant the user picked from a 30-s
-  A/B of four sounded doubled and far away in the episode — the A/B stretch had no fast exchanges, the episode was full of
-  them. A decision that lives at a transition (a cut, the music under the first words, a voice next to another voice) is
-  compared WITH the transition: pick a stretch that contains it, or `ab.py --after` (the next words after every version).
+- **A variant that wins in isolation can lose in context** (a voice setting picked on a calm stretch can sound doubled and
+  far away in fast exchanges). A decision that lives at a transition (a cut, the music under the first words, a voice next
+  to another voice) is compared WITH the transition: pick a stretch that contains it, or `ab.py --after` (the next words
+  after every version).
 
 ## Rules
 
@@ -68,4 +66,4 @@ work/venv/bin/python -I $S/ab_video.py out/ab/look.mp4 "<clip>@63.2:5" "<clip>@6
 after the other makes the second look «different» rather than better; sequential (default) is right for anything that moves
 — a cut, a transition, a caption animation, timing. `--af K "<filters>"` changes one version's sound.
 
-Measured (2026-11-13, «Покупка байка», 4K D-Log clip): two 5-s versions → 29 s, 5 MB; the filters run after the downscale.
+Two 5-s versions of a 4K log clip take ≈ 30 s and ≈ 5 MB; the filters run after the downscale.
