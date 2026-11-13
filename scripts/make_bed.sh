@@ -10,7 +10,7 @@ set -e -o pipefail
 P=$(cd "${1:?project}" && pwd); SEC=$2; PRESET=${3:-warm}; SK=$(cd "$(dirname "$0")" && pwd)
 case "$SEC" in warm|night|bright|dusk|spooky) PRESET=$SEC; SEC="";; esac
 if [ -z "$SEC" ]; then
-  SEC=$(python3 -I -c "import json,sys; sys.path.insert(0,'$SK'); from common import N; c=json.load(open('$P/work/cutlist.json')); print(round(c['totalFrames']/c.get('fps',30) + N['bedTailSec'], 1))")
+  SEC=$(python3 -I -c "import json,sys; sys.path.insert(0,sys.argv[1]); from common import N; c=json.load(open(sys.argv[2])); print(round(c['totalFrames']/c.get('fps',30) + N['bedTailSec'], 1))" "$SK" "$P/work/cutlist.json")
 fi
 PY="$P/work/venv/bin/python"; [ -x "$PY" ] || PY=python3   # needs numpy
 mkdir -p "$P/reel/public/audio"

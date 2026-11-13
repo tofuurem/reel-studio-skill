@@ -213,6 +213,7 @@ def main():
                                   {k: v for k, v in N.items() if not isinstance(v, (list, dict))}] + ([tune] if tune else [])).encode()).hexdigest()[:12]
     rep_p = "work/voice/dialogue.json"; old = load_json(rep_p, {}) or {}
     if not a.force and old.get("sig") == sig and os.path.exists(a.out):
+        os.utime(a.out)   # inputs rewritten with the same content: mark the stem current, or doctor.py (mtime) blocks the render forever
         print("dialogue unchanged"); print("DIALOGUE_DONE", a.out); return
 
     # ---- 1. pieces with handles, 2. levels

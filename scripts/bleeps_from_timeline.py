@@ -12,7 +12,7 @@ import argparse, json, os, sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__))); from swear import is_swear
 from common import in_ranges, load_json, silent_ranges, speech_run
 ap = argparse.ArgumentParser(); ap.add_argument("--words", default="work/audio/timeline.json"); ap.add_argument("--wav", default="work/audio/timeline.wav")
-ap.add_argument("--out", default="work/bleeps.json"); ap.add_argument("--fps", type=int, default=30); ap.add_argument("--cutlist", default="work/cutlist.json")
+ap.add_argument("--out", default="work/bleeps.json"); ap.add_argument("--fps", type=int, default=30, choices=[30], help="only 30: the template, the proxies and reelgen are 30 fps"); ap.add_argument("--cutlist", default="work/cutlist.json")
 a = ap.parse_args()
 words = [w for s in json.load(open(a.words))["segments"] for w in s.get("words", [])]
 cl = load_json(a.cutlist); quiet = silent_ranges(cl) if cl else []

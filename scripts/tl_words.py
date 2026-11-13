@@ -9,7 +9,7 @@ ranges are skipped — so fw("Tripo") finds the word the captions show, not the 
 import argparse, json, os, sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from common import apply_patches, brand, glue, in_ranges, load_json, silent_ranges
-ap = argparse.ArgumentParser(); ap.add_argument("--words", default="work/audio/timeline.json"); ap.add_argument("--out", default="work/tl_words.txt"); ap.add_argument("--fps", type=int, default=30)
+ap = argparse.ArgumentParser(); ap.add_argument("--words", default="work/audio/timeline.json"); ap.add_argument("--out", default="work/tl_words.txt"); ap.add_argument("--fps", type=int, default=30, choices=[30], help="only 30: the template, the proxies and reelgen are 30 fps")
 ap.add_argument("--brands", default="assets/brands.json"); ap.add_argument("--patches", default="work/caption_patches.json"); ap.add_argument("--cutlist", default="work/cutlist.json")
 a = ap.parse_args()
 ws = [w for s in json.load(open(a.words))["segments"] for w in s.get("words", [])]

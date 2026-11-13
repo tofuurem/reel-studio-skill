@@ -71,7 +71,9 @@ def main():
     ap = argparse.ArgumentParser(); ap.add_argument("project")
     ap.add_argument("--takes", action="store_true"); ap.add_argument("--clip"); ap.add_argument("--file")
     ap.add_argument("--at", type=float); ap.add_argument("--dur", type=float); ap.add_argument("--max-min", type=float, default=10.0)
-    a = ap.parse_args(); P = os.path.abspath(a.project); os.chdir(P)
+    a = ap.parse_args(); P = os.path.abspath(a.project)
+    if a.file: a.file = os.path.abspath(a.file)   # relative to where the user stands, not to the project
+    os.chdir(P)
     def rd(f):   # a long take: its first --max-min minutes (or --at / --dur)
         return V.read(f, ss=a.at, t=a.dur or a.max_min * 60)
     jobs = []

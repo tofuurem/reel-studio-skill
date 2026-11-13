@@ -42,8 +42,12 @@ def read_pcm(path, start, dur_src, speed=1.0):
     """float32 mono 16 kHz samples of `dur_src` source seconds from `start`, stretched by `speed`."""
     import numpy as np
     af = ",".join(atempo(speed)) or "anull"
-    raw = subprocess.run(["ffmpeg", "-v", "error", "-nostdin", "-ss", f"{max(0, start):.4f}", "-t", f"{dur_src:.4f}", "-i", path, "-vn", "-af", af, "-ac", "1", "-ar", str(SR), "-f", "f32le", "-"], capture_output=True).stdout
-    return np.frombuffer(raw, dtype=np.float32)
+    if not os.path.exists(path):   # make_proxies --allow-missing: say it loudly — this stretch gets no captions, anchors or bleeps
+        print(f"WARNING: no proxy {path} — its stretch is SILENT in the transcript; re-run transcribe.py once the proxy exists", file=sys.stderr, flush=True)
+        return np.zeros(0, dtype=np.float32)
+    r = subprocess.run(["ffmpeg", "-v", "error", "-nostdin", "-ss", f"{max(0, start):.4f}", "-t", f"{dur_src:.4f}", "-i", path, "-vn", "-af", af, "-ac", "1", "-ar", str(SR), "-f", "f32le", "-"], capture_output=True)
+    if r.returncode: sys.exit(f"ffmpeg could not read {path}: {r.stderr.decode(errors='replace').strip()[-300:]}")
+    return np.frombuffer(r.stdout, dtype=np.float32)
 
 def build_timeline_audio(cl, public, offsets, out_wav):
     """Assemble the timeline speech track (see the module doc). Returns a list of what went where, for the log."""

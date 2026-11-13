@@ -70,7 +70,7 @@ open(p, "w").write(json.dumps(c, indent=2) + "\n")
 PY
 # canvas from work/intake.json "canvas" (9:16 default; "16:9" for a horizontal vlog): theme.ts W / H follow it
 SK=$(cd "$(dirname "$0")" && pwd)
-WH=$(python3 -I -c "import json,os,sys; sys.path.insert(0,'$SK'); from common import canvas_size, load_json; c=(load_json('$P/work/intake.json',{}) or {}).get('canvas'); print(*canvas_size(c)) if c else print('')")
+WH=$(python3 -I -c "import json,os,sys; sys.path.insert(0,sys.argv[1]); from common import canvas_size, load_json; c=(load_json(sys.argv[2],{}) or {}).get('canvas'); print(*canvas_size(c)) if c else print('')" "$SK" "$P/work/intake.json")
 if [ -n "$WH" ]; then CW=${WH% *}; CH=${WH#* }
   sed -E "s/^export const W = [0-9]+;/export const W = $CW;/; s/^export const H = [0-9]+;/export const H = $CH;/" src/theme.ts > src/theme.ts.tmp && mv src/theme.ts.tmp src/theme.ts; echo "canvas ${CW}x${CH} (work/intake.json)"; fi
 [ -f remotion.config.ts ] && grep -q setChromiumOpenGlRenderer remotion.config.ts || cp "$T/remotion.config.ts" .

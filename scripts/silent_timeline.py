@@ -13,7 +13,7 @@ import argparse, json, os, re, subprocess, sys
 HERE = os.path.dirname(os.path.abspath(__file__))
 
 ap = argparse.ArgumentParser(); ap.add_argument("project"); ap.add_argument("--seconds", type=float, required=True)
-ap.add_argument("--preset", default="warm", choices=["warm", "night", "bright", "dusk"]); ap.add_argument("--fps", type=int, default=30)
+ap.add_argument("--preset", default="warm", choices=["warm", "night", "bright", "dusk"]); ap.add_argument("--fps", type=int, default=30, choices=[30], help="only 30: the template, the proxies and reelgen are 30 fps")
 a = ap.parse_args()
 P = os.path.abspath(a.project); fps = a.fps; S = a.seconds; F = int(round(S * fps))
 subprocess.run([os.path.join(HERE, "vo_carriers.sh"), P, "--silence", str(int(S) + 2)], check=True)

@@ -161,12 +161,22 @@ def lut_for(path, lut=None, lut_map=None, info=None):
 
 HDR_TRANSFERS = {"arib-std-b67": "hlg", "smpte2084": "pq"}
 
+HDR_NAMES = {"hlg": "HLG_BT2020_to_Rec709.cube", "pq": "PQ_BT2020_to_Rec709.cube"}   # = hdr_lut.NAMES
+
 def hdr_lut(kind):
-    """The HDR → Rec.709 cube in LUT_DIR, generated on first use (hdr_lut.py, numpy; ≈ 3 s)."""
-    import hdr_lut as H
-    p = os.path.join(LUT_DIR, H.NAMES[kind])
+    """The HDR → Rec.709 cube in LUT_DIR, generated on first use (hdr_lut.py, numpy; ≈ 3 s). make_proxies / inventory run on a
+    plain python3 that may have no numpy: then the shared venv's python writes the cubes."""
+    p = os.path.join(LUT_DIR, HDR_NAMES[kind])
     if not os.path.exists(p):
-        os.makedirs(LUT_DIR, exist_ok=True); H.write_cube(p, kind); print("generated", p)
+        os.makedirs(LUT_DIR, exist_ok=True)
+        try:
+            import hdr_lut as H
+            H.write_cube(p, kind)
+        except ImportError:
+            py = os.path.join(CACHE, "venv", "bin", "python")
+            if not os.path.exists(py): sys.exit("numpy is needed for the HDR LUT — run setup_env.sh (it builds ~/.cache/reel-studio/venv)")
+            subprocess.run([py, "-I", os.path.join(os.path.dirname(os.path.abspath(__file__)), "hdr_lut.py"), "--out", LUT_DIR], check=True, capture_output=True)
+        print("generated", p)
     return p
 
 def _fps(r):

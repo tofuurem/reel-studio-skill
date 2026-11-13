@@ -156,13 +156,17 @@ def main() -> None:
     model = onnx_asr.load_model(args.model, providers=["CPUExecutionProvider"]).with_vad(
         onnx_asr.load_vad("silero"), threshold=args.vad_threshold).with_timestamps()
     for src in map(Path, args.sources):
-        target = OUT / f"{clip_id(str(src))}.json"
-        if target.exists() and not args.force:
+        target = OUT / f"{clip_id(str(src))}.json"; side = target.parent / f".{target.stem}.src.json"   # hidden: `pk2words.py work/pk/*.json` must not pick it up
+        st = src.stat(); sig = {"source": os.path.realpath(src), "size": st.st_size, "mtime": int(st.st_mtime)}
+        old = json.loads(side.read_text()) if side.exists() else None
+        # skip only when the map was made from THIS file: DJI counters repeat across days, a series pool shares work/pk
+        if target.exists() and not args.force and (old is None or old == sig):
             print("skip", target)
             continue
+        if target.exists() and old is not None: print(f"{target}: made from another file ({old['source']}) — redoing")
         t0 = time.time()
         sentences, dropped = transcribe_clip(src, model, model)  # model carries the VAD adapter
-        target.write_text(json.dumps(sentences, ensure_ascii=False, indent=1))
+        target.write_text(json.dumps(sentences, ensure_ascii=False, indent=1)); side.write_text(json.dumps(sig, ensure_ascii=False))
         n = sum(len(s["words"]) for s in sentences)
         print(f"{target}: {len(sentences)} sentences, {n} words, {dropped} non-Russian segments dropped, {time.time() - t0:.0f}s")
     print("GIGAAM_DONE")

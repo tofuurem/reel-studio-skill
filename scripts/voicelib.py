@@ -33,10 +33,12 @@ def read(src, ss=None, t=None, ch=None, sr=SR):
     """Mono float64 at `sr` from any media file (ch = one channel of a stereo track, else a downmix)."""
     seek = ["-ss", f"{ss:.4f}"] if ss is not None else []
     dur = ["-t", f"{t:.4f}"] if t is not None else []
+    k = subprocess.run(["ffprobe", "-v", "error", "-select_streams", "a:0", "-show_entries", "stream=channels", "-of", "csv=p=0", src],
+                       capture_output=True, text=True).stdout.strip()
+    if not k: return np.zeros(0)   # no audio stream (a screen recording, a camera with sound off): callers warn and go on
     if ch is not None: mix = ["-af", f"pan=mono|c0=c{ch}"]
     else:   # the mean of the channels: ffmpeg's -ac 1 adds them at 0.707 each, +3 dB on a lav sent to both (false «clipping»)
-        k = int(subprocess.run(["ffprobe", "-v", "error", "-select_streams", "a:0", "-show_entries", "stream=channels", "-of", "csv=p=0", src],
-                               capture_output=True, text=True).stdout.strip() or 1)
+        k = int(k.split(",")[0] or 1)
         mix = [] if k == 1 else ["-af", "pan=mono|c0=" + "+".join(f"{1 / k:.6f}*c{i}" for i in range(k))]
     raw = subprocess.run(["ffmpeg", "-v", "error", "-nostdin", *seek, *dur, "-i", src, "-map", "0:a:0", "-vn", *mix, "-ar", str(sr), "-f", "f32le", "-"],
                          capture_output=True, check=True).stdout

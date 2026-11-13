@@ -155,7 +155,10 @@ def main():
             row.update(mode="manual", keys=[[round(a0, 3), round(lim(c0), 4)], [round(b0, 3), round(lim(c1), 4)]])
         else:
             cp = f"work/people/{cid}.json"
+            st = os.stat(src); sig = [os.path.realpath(src), st.st_size, int(st.st_mtime)]
             cache = caches.get(cid) or caches.setdefault(cid, {} if a.force else load_json(cp, {}) or {})
+            if cache.get("sig", sig) != sig: cache.clear()   # another file under the same id (a repeated DJI counter, a replaced source)
+            cache["sig"] = sig
             frames = scan(src, a0, b0, a.fps, cache); atomic_json(cache, cp)
             keys, found = path(frames, a0, b0, span)
             row.update(frames=len(frames), found=found)

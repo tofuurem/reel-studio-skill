@@ -39,7 +39,7 @@ written, so a typo never silently shortens the reel. cutlist.sources lists only 
 (unused takes are not encoded by make_proxies).
 """
 import argparse, json, os, re, sys
-ap = argparse.ArgumentParser(); ap.add_argument("plan"); ap.add_argument("--out", default="work"); ap.add_argument("--lut"); ap.add_argument("--fps", type=int, default=30)
+ap = argparse.ArgumentParser(); ap.add_argument("plan"); ap.add_argument("--out", default="work"); ap.add_argument("--lut"); ap.add_argument("--fps", type=int, default=30, choices=[30], help="only 30: the template, the proxies and reelgen are 30 fps")
 a = ap.parse_args(); P = json.load(open(a.plan)); fps = a.fps
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__))); from swear import is_swear  # one matcher for cut + captions
 from common import N, canvas_size, clip_id, speech_run

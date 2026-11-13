@@ -95,7 +95,8 @@ def heic_cmd(src, out):
 
 def put(src, target, convert):
     """Copy (or convert) to a hidden temp name in the target folder, verify, rename. Returns an error text or None."""
-    tmp = os.path.join(os.path.dirname(target), "." + os.path.basename(target) + ".part")
+    stem, ext = os.path.splitext(os.path.basename(target))   # the real extension last: heif-convert picks its encoder by it
+    tmp = os.path.join(os.path.dirname(target), "." + stem + ".part" + ext)
     try:
         if convert: r = subprocess.run(heic_cmd(src, tmp), capture_output=True, text=True); ok = r.returncode == 0 and os.path.exists(tmp) and os.path.getsize(tmp) > 0
         else: shutil.copy2(src, tmp); ok = os.path.getsize(tmp) == os.path.getsize(src)

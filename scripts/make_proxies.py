@@ -158,7 +158,7 @@ def inside(cid, entry):
     if len({(o["start"], o["end"]) for o in olds}) > 1: return None
     return olds[0]["start"], olds[0]["end"]
 
-failed = []
+failed = []; not_made = set()
 for src, cid, info, rng, entry, why in plan:
     keep = inside(cid, entry)
     if keep and (abs(keep[0] - entry["start"]) > 0.01 or abs(keep[1] - entry["end"]) > 0.01):
@@ -214,12 +214,12 @@ for src, cid, info, rng, entry, why in plan:
     rc = ffmpeg(args, quiet=False)
     want = (entry["end"] - entry["start"]) / (1.001 if ntsc else 1)
     for (r, W, H, out, e), tmp in zip(todo, tmps):
-        if rc != 0: _rm(tmp); failed.append(f"{cid} {r}: ffmpeg exit {rc}"); continue
+        if rc != 0: _rm(tmp); failed.append(f"{cid} {r}: ffmpeg exit {rc}"); not_made.add(cid); continue
         ok, msg = commit(tmp, out, want, max(0.6, want * 0.002))
-        if not ok: failed.append(msg); continue
+        if not ok: failed.append(msg); not_made.add(cid); continue
         manifests[r][cid] = e; atomic_json(manifests[r], man_paths[r])   # after every file: a crash leaves a true manifest
 for src, cid, info, rng, entry, why in plan:
-    offsets[cid] = entry["start"]
+    if cid not in not_made: offsets[cid] = entry["start"]   # a failed re-encode keeps the old proxy, so it keeps its old offset
 atomic_json(offsets, offsets_path)
 # the other resolution must have been cut from the same windows, or Reel2K plays other seconds than Studio shows
 for r in RES:

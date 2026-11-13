@@ -59,7 +59,7 @@ def probe_duration(path):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--draft", help="draft name (folder under CapCut drafts) or full path; default = most recently modified")
-    ap.add_argument("--fps", type=int, default=30)
+    ap.add_argument("--fps", type=int, default=30, choices=[30], help="only 30: the template, the proxies and reelgen are 30 fps")
     ap.add_argument("--out", default="work")
     ap.add_argument("--list", action="store_true", help="only list drafts")
     a = ap.parse_args()
