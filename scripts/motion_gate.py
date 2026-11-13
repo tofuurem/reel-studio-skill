@@ -51,9 +51,9 @@ def main():
     # the cut sheet: 4 frames per cut, rows of cuts, pages of a.max rows
     th = 180 if vh > vw else 110; tw = round(th * vw / vh / 2) * 2; pages = 0
     for p0 in range(0, len(cuts), a.max):
-        rows = cuts[p0: p0 + a.max]; sel = []
-        for c, k in rows: sel += [max(0, c - 2), max(0, c - 1), c, c + 1]
-        expr = "+".join(f"eq(n\\,{f})" for f in sel)
+        rows = cuts[p0: p0 + a.max]
+        # one between() per cut: 120 eq() terms overflowed ffmpeg's expression parser on a 24-min vlog (Halloween, 2026-11-09)
+        expr = "+".join(f"between(n\\,{max(0, c - 2)}\\,{max(3, c + 1)})" for c, k in rows)
         name = os.path.join(out, f"cuts_{p0 // a.max + 1:02d}.jpg")
         subprocess.run(["ffmpeg", "-v", "error", "-nostdin", "-y", "-i", a.render, "-vf", f"select='{expr}',scale={tw}:{th},tile=4x{len(rows)}:padding=3",
                         "-frames:v", "1", "-fps_mode", "passthrough", name], check=True)

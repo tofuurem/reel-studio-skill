@@ -117,8 +117,13 @@ def sheet(rows, cl):
     with tempfile.TemporaryDirectory(dir="work") as tmp:
         for i, (src, t, c, w, h) in enumerate(tiles):
             W = 320; H = round(W * h / w / 2) * 2; cw = round(H * cl["canvas"]["w"] / cl["canvas"]["h"]); x = max(0, min(W - cw, round(c * W - cw / 2)))
-            subprocess.run(["ffmpeg", "-v", "error", "-nostdin", "-y", "-ss", f"{max(0, t):.3f}", "-i", src, "-frames:v", "1",
-                            "-vf", f"scale={W}:{H},drawbox=x={x}:y=0:w={cw}:h={H}:color=red@0.9:t=3", os.path.join(tmp, f"{i:04d}.jpg")], check=True)
+            out, vf = os.path.join(tmp, f"{i:04d}.jpg"), f"scale={W}:{H},drawbox=x={x}:y=0:w={cw}:h={H}:color=red@0.9:t=3"
+            # a crop key can sit past the source's last frame (segment end + the dissolve tail): fall back to the last frame
+            for seek in (["-ss", f"{max(0, t):.3f}"], ["-sseof", "-0.5"]):
+                subprocess.run(["ffmpeg", "-v", "quiet", "-nostdin", "-y", *seek, "-i", src, "-frames:v", "1", "-vf", vf, out])
+                if os.path.exists(out) and os.path.getsize(out) > 0: break
+            else:
+                subprocess.run(["ffmpeg", "-v", "error", "-nostdin", "-y", "-f", "lavfi", "-i", f"color=gray:s={W}x{H}", "-frames:v", "1", out], check=True)
         per = 24
         for p in range(0, len(tiles), per):
             lst = os.path.join(tmp, f"list{p}.txt")
