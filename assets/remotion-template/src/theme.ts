@@ -23,6 +23,10 @@ export const shadows = {
   cover: "0 24px 60px rgba(0,0,0,0.4)", // plates on covers (stills only)
 };
 
+/** Comic lettering (scenes/Comic.tsx; Halloween v5, 2026-11-09: «банан — комиксный герой»): flat yellow fill, a thick ink
+ *  outline, a hard red offset (no blur — flat ink, not a glow), a paper burst with halftone dots. */
+export const comic = { fill: "#FFE14D", ink: "#141210", pop: "#E8352B", paper: "#FFF7DC", dot: "rgba(232,53,43,0.28)", tag: "#FFFFFF" };
+
 /** Safe area of the 9:16 canvas (Instagram chrome): nothing important above top / below bottom / in the right strip. */
 export const safe = { top: N.safeTop, bottom: N.safeBottom, right: N.safeRight, x: N.safeX };
 

@@ -109,6 +109,8 @@ for i, s in enumerate(merged):
     props = [f'src="footage/{cid}.mp4"', f'trimBefore={{{tb}}}', f'punch={{{punch}}}']
     drift = 0 if KEEP_FRAMING else N["punchDrift"]
     if KEEP_FRAMING: props.append("drift={0}")   # a draft keeps the user's framing: no slow push-in either
+    if s.get("drift") is not None:   # a plan range may set its own push-in: 0 for a framed composite (a window baked into the
+        drift = float(s["drift"]); props.append(f"drift={{{drift}}}")   # picture must not grow — «Покупать байк» 2026-11-10)
     if s.get("speed", 1) != 1: props.append(f'playbackRate={{{s["speed"]}}}')
     if s["volume"] < 0.01: props.append("volume={0}")
     elif s.get("muteRanges"):

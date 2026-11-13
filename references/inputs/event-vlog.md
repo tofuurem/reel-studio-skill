@@ -15,6 +15,15 @@ rounds of feedback). It is the raw-takes entry (`inputs/raw-takes.md`) with thes
 - Uncensored for the vlog (the user's own channel/archive) unless they say otherwise; the reel cut from it is censored.
   A censored long version (YouTube, family) keeps the whole cut: bleeps, masked captions, tracked blur — `craft/censor.md`.
 - Music: usually none («тут не получится ничего хорошего») — the event's own sound carries it. Ask.
+- **Captions: all speech or none** (v5 review, 2026-11-09): key lines only («ключевые фразы») read as captions that come and
+  go — «только к ним привыкаешь, потом их нету»; the user chose calm captions on every line (both versions).
+- **Who is who**: a name on the person the first time each one appears (`NameTag`, a pill riding on the tracked head), not
+  only a card later in the costume — the user did not know who was talking.
+- **The ending is the user's**: they wanted the vlog to stop on a line («закончить на вопросе… больше ничего не вставлять»);
+  a coda added after the last line (v4: a time-lapse ride home) was cut. Ask before adding anything after the last word.
+- **Seams with a reason** (v5): whip = another place the same day, blur = a jump in time, one leak into a sunset, push =
+  deeper into the night, a stepped jump-in once on a punchline («Во всём.»); dissolves everywhere else. The user asked for
+  «более прикольные переходы» — more kinds than `transitionKindsMax`, each with its reason, still alternating.
 
 ## Steps (on top of raw-takes)
 1. **Intake**: `"canvas": "16:9"` in `work/intake.json` (scaffold.sh sets the template's W × H from it; cut_from_transcript
