@@ -14,6 +14,8 @@ included; the action reel's work/shots.json sfx) — and reads back:
   --from / --to for a part. Prints EARS_DONE (or EARS_SKIP when earshot is not installed).
 """
 import argparse, json, os, re, shutil, subprocess, sys
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from common import add_guard_args, guard_reexec
 
 
 def reel_cues(P):
@@ -41,7 +43,9 @@ def main():
     ap = argparse.ArgumentParser(); ap.add_argument("project"); ap.add_argument("render")
     ap.add_argument("--from", dest="start", type=float); ap.add_argument("--to", dest="end", type=float)
     ap.add_argument("--detail", choices=["low", "normal", "high"], default="normal")
+    add_guard_args(ap, 6.0)   # earshot (CLAP + AST on the CPU): 1.1 GB on a 20 s clip
     a = ap.parse_args(); P = os.path.abspath(a.project); render = os.path.abspath(a.render)
+    if shutil.which("earshot"): guard_reexec(a)
     if not shutil.which("earshot"):
         print("EARS_SKIP earshot is not installed (python3 -I deps.py --install --with sound) — audio_qa.py and motion_gate.py still apply"); return
     qa = os.path.join(P, "work/qa"); os.makedirs(qa, exist_ok=True)

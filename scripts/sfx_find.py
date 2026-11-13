@@ -19,6 +19,8 @@ Use a real recording when the picture shows a real event the camera did not capt
 crowd) — the camera's own sound comes first (`amb` beats, event-vlog.md). Prints SFX_FIND_DONE.
 """
 import argparse, json, os, re, shutil, subprocess, sys, urllib.parse
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from common import add_guard_args, guard_reexec
 
 API = "https://api.openverse.org/v1/audio/"
 OK = {"cc0": ["cc0"], "by": ["cc0", "by"]}
@@ -119,7 +121,8 @@ def main():
     ap.add_argument("--license", choices=sorted(OK), default="cc0"); ap.add_argument("--n", type=int, default=8)
     ap.add_argument("--min-s", type=float, default=0.1); ap.add_argument("--max-s", type=float, default=12.0)
     ap.add_argument("--pick", type=int); ap.add_argument("--name"); ap.add_argument("--trim", help="A-B seconds of the candidate")
-    a = ap.parse_args(); P = os.path.abspath(a.project)
+    add_guard_args(ap, 4.0)   # earshot rank / find (CLAP) over a handful of short candidates
+    a = ap.parse_args(); guard_reexec(a); P = os.path.abspath(a.project)
     pick(a, P) if a.pick else search(a, P)
     print("SFX_FIND_DONE")
 

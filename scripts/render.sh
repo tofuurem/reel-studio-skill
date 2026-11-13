@@ -1,7 +1,7 @@
 #!/bin/zsh
 # Render a composition and set loudness with a STATIC gain (never single-pass loudnorm: it is a dynamic
 # normaliser and pumps the music bed up in speech pauses).
-# Usage: [CONC=1] [FORCE=1] [REUSE_RAW=1] render.sh <project-dir> <Reel|Reel2K|Action2K|ActionTrack> <out.mp4> [target LUFS = numbers.json targetLufs]
+# Usage: [CONC=1] [FORCE=1] [REUSE_RAW=1] [MAX_GB=12] [MIN_FREE_GB=4] render.sh <project-dir> <Reel|Reel2K|Action2K|ActionTrack> <out.mp4> [target LUFS = numbers.json targetLufs]
 # REUSE_RAW=1 masters a <out>.raw.mov left by a run that failed after Remotion (no re-render).
 # CONC=1 by default: with 4 tabs the GPU occasionally leaves a card half-rasterised on a single frame ("blinking");
 # 1 tab is not slower here (GPU-bound).
@@ -33,7 +33,11 @@ if [ "${REUSE_RAW:-0}" = 1 ] && [ -s "$RAW" ]; then echo "REUSE_RAW=1: mastering
 # caffeinate (macOS) / systemd-inhibit (Linux): a sleeping display stalls headless Chrome (see references/pitfalls/render-and-qa.md)
 mkdir -p "$P/work/tmp"; export TMPDIR="$P/work/tmp"   # the bundle lives in the project: nothing else can sweep it away mid-render
 KEEP=(); if command -v caffeinate >/dev/null; then KEEP=(caffeinate -dis); elif command -v systemd-inhibit >/dev/null; then KEEP=(systemd-inhibit --what=sleep:idle --why=render); fi
-$KEEP npx remotion render "$COMP" "$RAW" --codec=h264 --crf=17 --audio-codec=pcm-16 --concurrency=${CONC:-1} > "$LOG" 2>&1 || { echo "RENDER FAILED (remotion exit) — last lines of $LOG:"; tail -30 "$LOG"; exit 1; }
+# memory guard (macOS): Remotion + Chrome + the video decoders can grow to many GB on a long 2K timeline; the guard kills the render
+# (exit 137) at MAX_GB (default 12) of footprint or when the Mac has less than MIN_FREE_GB (default 4) left — instead of a frozen Mac
+GUARD=(); [ "$(uname)" = Darwin ] && GUARD=(python3 -I "$SCRIPTS/mem_guard.py" --max-gb "${MAX_GB:-12}" --min-free-gb "${MIN_FREE_GB:-4}" --)
+"${GUARD[@]}" $KEEP npx remotion render "$COMP" "$RAW" --codec=h264 --crf=17 --audio-codec=pcm-16 --concurrency=${CONC:-1} > "$LOG" 2>&1 || { rc=$?; [ $rc = 137 ] && echo "RENDER STOPPED BY THE MEMORY GUARD (MAX_GB=${MAX_GB:-12}, MIN_FREE_GB=${MIN_FREE_GB:-4}): close other apps or raise MAX_GB; the raw file is incomplete"; echo "RENDER FAILED (remotion exit $rc) — last lines of $LOG:"; tail -30 "$LOG"; exit 1; }
+grep MEM_GUARD "$LOG" | tail -1 || true
 fi
 [ -s "$RAW" ] || { echo "RENDER FAILED — no output; see $LOG"; tail -30 "$LOG"; exit 1; }
 FR=$(ffprobe -v error -select_streams v:0 -count_packets -show_entries stream=nb_read_packets -of csv=p=0 "$RAW" | tr -dc 0-9)

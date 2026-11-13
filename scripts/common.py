@@ -25,6 +25,8 @@ ACTION4_LUT = "DJI OSMO Action 4 D-Log M to Rec.709 V1.cube"
 # The colour profile a DJI camera writes into its «djmd» metadata track (protobuf; checked on 855 clips, 2026-11-08):
 # proto name → field path of the profile code.
 DJI_COLOR_FIELD = {"dvtm_ac204.proto": "2.4.1",            # Osmo Action 5 Pro
+                   "dvtm_ac203.proto": "2.4.1",            # Osmo Action 4 (AC003). Normal checked 2026-11-09 on 3 clips: field 2.4
+                   # is written but empty (code 0); that D-Log M lands in 2.4.1 as on ac204 is a guess — no D-Log M sample yet
                    "dvtm_osmo_pocket_4.proto": "2.2.3.1"}  # Osmo Pocket 4 and 4P
 DJI_COLOR_CODES = {0: "Normal", 2: "D-Log", 9: "HLG", 19: "D-Log-M", 22: "D-Log2"}
 # (model key from the encoder tag, profile) → DJI's own cube (download it from DJI; not shipped, assets/luts/README.md).
@@ -330,7 +332,7 @@ def load_offsets(cutlist_path):
 # ---------------------------------------------------------------- word patches (make_captions.py and tl_words.py share them)
 
 def apply_patches(raw, patches):
-    """caption_patches.json on RAW whisper tokens (before gluing): drop, drop_at [[sec, token]], replace {old: new},
+    """caption_patches.json on RAW recognizer tokens (before gluing): drop, drop_at [[sec, token]], replace {old: new},
     replace_at [[sec, old, new]] (±1.5 s). Returns (kept tokens, dropped count)."""
     if not patches: return raw, 0
     drop = set(patches.get("drop", [])); rep = patches.get("replace", {}); rep_at = patches.get("replace_at", []); drop_at = patches.get("drop_at", [])
@@ -346,7 +348,7 @@ def apply_patches(raw, patches):
     return kept, len(raw) - len(kept)
 
 def glue(raw):
-    """Whisper splits a word into tokens without a leading space ("Яндекс" + ".Облаке"): glue them into words."""
+    """A recognizer may split a word into tokens without a leading space ("Яндекс" + ".Облаке"): glue them into words."""
     out = []
     for w in raw:
         if out and not w["word"].startswith(" "): out[-1]["word"] += w["word"]; out[-1]["end"] = w["end"]
@@ -398,6 +400,24 @@ def crop_expr(keys, start, scaled_w, out_w):
         e = f"if(lt(t,{t1:.3f}),{seg},{e})"
     e = f"if(lt(t,{pts[0][0]:.3f}),{pts[0][1]:.1f},{e})"   # before the first key: hold it (no extrapolation)
     return f"'max(0,min({scaled_w - out_w},{e}))'"
+
+# ---- memory guard: ONE mechanism for every heavy python step (a model, DeepFilterNet, BiRefNet, earshot) ----
+def add_guard_args(ap, max_gb):
+    """--max-gb / --min-free-gb / --no-guard for a heavy script; call guard_reexec(args) right after parse_args()."""
+    ap.add_argument("--max-gb", type=float, default=max_gb, help="memory guard: kill the run (and its children) above this footprint, GB")
+    ap.add_argument("--min-free-gb", type=float, default=4.0, help="memory guard: memory always left to the Mac, GB")
+    ap.add_argument("--no-guard", action="store_true", help="run without the memory guard (do not)")
+
+def guard_reexec(a):
+    """Re-run this very command under mem_guard.py (macOS only; once — MEM_GUARDED=1 marks the inner run). The guard kills the
+    process tree with exit 137 when it passes --max-gb or the Mac has less than --min-free-gb left, and prints the peak."""
+    if a.no_guard or os.environ.get("MEM_GUARDED") or sys.platform != "darwin": return
+    guard = os.path.join(os.path.dirname(os.path.abspath(__file__)), "mem_guard.py")
+    cmd = [sys.executable, "-I", guard, "--max-gb", str(a.max_gb), "--min-free-gb", str(a.min_free_gb), "--",
+           sys.executable, "-I", os.path.abspath(sys.argv[0]), *sys.argv[1:]]
+    sys.stdout.flush(); sys.stderr.flush()
+    os.execve(sys.executable, cmd, {**os.environ, "MEM_GUARDED": "1"})
+
 
 if __name__ == "__main__":
     a = sys.argv[1:]

@@ -23,6 +23,8 @@ Needs ffmpeg with libvpx-vp9. Cut the range first: only the frames of the shot a
 """
 import sys, os, json, subprocess, argparse, time
 import numpy as np
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from common import add_guard_args, guard_reexec
 
 BIREFNET = ("ZhengPeng7/BiRefNet", "e2bf8e4460fc8fa32bba5ea4d94b3233d367b0e4")   # pinned: the repo ships its own model code
 MODEL_SIDE = 1024
@@ -36,7 +38,8 @@ ap.add_argument("--quality", choices=["accurate", "balanced"], default="accurate
 ap.add_argument("--fps", type=float, default=30.0)
 ap.add_argument("--choke", type=float, default=None, help="alpha below this → 0 and the edge ramp tightened (default 0.15 birefnet, 0 Vision): "
                 "half-transparent edge pixels mix the background into a dark fringe over a white title")
-a = ap.parse_args()
+add_guard_args(ap, 10.0)   # BiRefNet at 1024 px on MPS (unified memory)
+a = ap.parse_args(); guard_reexec(a)
 
 
 def has_torch():

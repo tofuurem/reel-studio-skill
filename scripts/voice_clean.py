@@ -20,7 +20,7 @@ Re-runs skip a source whose inputs and settings did not change. Prints VOICE_DON
 import argparse, glob, hashlib, json, os, subprocess, sys, tempfile
 import numpy as np, soundfile as sf
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from common import N, clip_id
+from common import N, add_guard_args, clip_id, guard_reexec
 import voicelib as V
 
 SR = V.SR
@@ -103,8 +103,7 @@ def dfn(df, x, att, tmp):
     """DeepFilterNet limited to `att` dB. Its output is 16-bit: the input is scaled to −1 dBFS peak first and back after."""
     pk = max(float(np.abs(x).max()), 1e-6); k = 10 ** (-1 / 20) / pk
     f = os.path.join(tmp, "v.wav"); sf.write(f, (x * k).astype(np.float32), SR, subtype="FLOAT")
-    r = subprocess.run([df, f, "-a", str(att), "-o", tmp], capture_output=True, text=True)
-    if r.returncode: sys.exit(f"DeepFilterNet failed: {r.stderr[-600:]}")
+    V.df_run(df, f, tmp, att)   # long files in 2-minute pieces: DeepFilterNet needs ≈ 1 GB of RAM per minute
     return (V.fit(sf.read(os.path.join(tmp, "v_DeepFilterNet3.wav"), dtype="float32")[0], len(x)) / k).astype(np.float32)
 
 
@@ -112,8 +111,8 @@ def main():
     ap = argparse.ArgumentParser(); ap.add_argument("project"); ap.add_argument("sources", nargs="+")
     ap.add_argument("--lav", action="append", default=[], help="DJI transmitter recordings: a folder or a WAV file (repeat the flag for more): the mic's own 32-bit float file")
     ap.add_argument("--atten", default="auto", help="DeepFilterNet limit in dB, or auto (noiseTargetDb − SNR); 0 = no DeepFilterNet")
-    ap.add_argument("--force", action="store_true")
-    a = ap.parse_args(); P = os.path.abspath(a.project)
+    ap.add_argument("--force", action="store_true"); add_guard_args(ap, 8.0)
+    a = ap.parse_args(); guard_reexec(a); P = os.path.abspath(a.project)
     ids = [clip_id(s) for s in a.sources]
     dup = {i for i in ids if ids.count(i) > 1}
     if dup: sys.exit(f"clip id collision {sorted(dup)} (two cameras with the same DJI counter?) — see clipid.py")

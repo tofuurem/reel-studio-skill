@@ -18,7 +18,7 @@ Prints DUALMIC_DONE.
 import argparse, json, os, subprocess, sys, tempfile
 import numpy as np, soundfile as sf
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from common import N, atomic_json, clip_id, load_json, src_dur
+from common import N, add_guard_args, atomic_json, clip_id, guard_reexec, load_json, src_dur
 import voicelib as V
 
 SR = 48000; HOP = 480   # 10 ms
@@ -84,7 +84,7 @@ def clean(P, src, ranges, tmp):
         for ch, name in chans:
             f = os.path.join(tmp, f"w{i:03d}_{name}.wav"); ins.append(f)
             scale[(i, name)] = extract(src, ch, f) if rg is None else extract(src, ch, f, rg[0], rg[1] - rg[0])
-    subprocess.run([df, *ins, "-a", str(N["dualmicAtten"]), "-o", tmp], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    for f in ins: V.df_run(df, f, tmp, N["dualmicAtten"])   # one file at a time, long ones in 2-minute pieces (≈ 1 GB of RAM per minute otherwise)
     out = []
     for i, _ in enumerate(ranges):
         got = [sf.read(os.path.join(tmp, f"w{i:03d}_{name}_DeepFilterNet3.wav"))[0] / scale[(i, name)] for _, name in chans]
@@ -105,7 +105,8 @@ def windows(cl, src, pad, dur):
 def main():
     ap = argparse.ArgumentParser(); ap.add_argument("project"); ap.add_argument("sources", nargs="+")
     ap.add_argument("--cutlist"); ap.add_argument("--pad", type=float, default=2.0); ap.add_argument("--test", nargs=2, type=float, metavar=("START", "DUR"))
-    a = ap.parse_args(); P = os.path.abspath(a.project)
+    add_guard_args(ap, 8.0)
+    a = ap.parse_args(); guard_reexec(a); P = os.path.abspath(a.project)
     os.makedirs(os.path.join(P, "work/tmp"), exist_ok=True)
     if a.test:
         src = a.sources[0]; cid = clip_id(src); outdir = os.path.join(P, "work/voice/test"); os.makedirs(outdir, exist_ok=True)
@@ -116,7 +117,7 @@ def main():
                 for name in ("L", "R"): os.replace(os.path.join(tmp, f"w000_{name}_DeepFilterNet3.wav"), os.path.join(outdir, f"{cid}_{name}.wav"))
             dm = os.path.join(tmp, "dm.wav")
             subprocess.run(["ffmpeg", "-v", "error", "-nostdin", "-y", "-ss", str(rg[0]), "-t", str(a.test[1]), "-i", src, "-map", "0:a:0", "-ac", "1", "-ar", str(SR), dm], check=True)
-            subprocess.run([os.path.join(P, "work/dfvenv/bin/deepFilter"), dm, "-o", tmp], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            V.df_run(os.path.join(P, "work/dfvenv/bin/deepFilter"), dm, tmp)
             os.replace(os.path.join(tmp, "dm_DeepFilterNet3.wav"), os.path.join(outdir, f"{cid}_downmix.wav"))
         print("test files:", outdir, "(" + ("two mics" if two else "one mic") + ")"); print("DUALMIC_DONE"); return
     cl = load_json(os.path.join(P, a.cutlist)) if a.cutlist else None
