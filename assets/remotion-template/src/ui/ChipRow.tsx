@@ -7,7 +7,7 @@ import { inAt, outBefore } from "./anim";
 /** A chip lands on its word (`at`, local frame). `bg` from the palette; text colour follows the fill. */
 export type Chip = { at: number; text: string; bg?: string };
 
-/** Wrapping row of chips (tool names, verbs) — lofiroom ep1/ep2. Flat landing, no tilt. */
+/** Wrapping row of chips (tool names, verbs). Flat landing, no tilt. */
 export const ChipRow: React.FC<{ chips: Chip[]; size?: number; justify?: React.CSSProperties["justifyContent"] }> = ({ chips, size = 34, justify = "flex-start" }) => {
   const frame = useCurrentFrame();
   return (

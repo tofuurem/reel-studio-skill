@@ -8,6 +8,8 @@ and `exact: false` snapping see whole words. Saves a second pass over a long raw
 plan (word ends are ±0.1–0.26 s: cut on pauses.py / speech_run, not on a word end); the final captions still come from
 transcribe.py on the cut timeline.
 """
+import sys as _sys
+if __name__ == "__main__" and ("-h" in _sys.argv[1:] or "--help" in _sys.argv[1:]): print(__doc__); _sys.exit(0)   # usage, no side effects
 import json, os, sys
 
 for src in sys.argv[1:]:

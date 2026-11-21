@@ -5,6 +5,8 @@ Generators (copy to `work/gen_reel.py`; all use scripts/reelgen.py and only temp
 - `gen_reel_split.example.py` — camera + voiceover takes: SplitStage + SideList / SideBubble, a Board over the carriers.
 - `gen_reel_voiceover.example.py` — voiceover only: crossfading boards (tiles, ChatCard, Ledger), a closing Plate.
 - `gen_reel_silent.example.py` — images only, no voice: pictures on the bed's beat grid, no captions.
+- `gen_reel_comic.example.py` — the comic style (`references/craft/styles.md`): inset and full `ComicPanel`s with balloons and
+  boxes via `R.comic_panel`, real credited gameplay in a `VideoCard`, a `STYLE` switch for the A/B of one beat.
 
 Scenes (copy to `reel/src/scenes/`):
 - `TripoStory.example.tsx` — one object carries a chapter (Motion kit: camera, ScanSwap, PriceTag, FactCard).

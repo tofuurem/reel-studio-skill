@@ -12,6 +12,8 @@ Why: anchors are words, never typed frame numbers — a re-cut is a re-run. Ever
 Sequences get premountFor; imports are found by scanning `export const` in reel/src, so an example never imports a scene
 that the project does not have. Numbers come from references/craft/numbers.json (rg.N).
 """
+import sys as _sys
+if __name__ == "__main__" and ("-h" in _sys.argv[1:] or "--help" in _sys.argv[1:]): print(__doc__); _sys.exit(0)   # usage, no side effects
 import difflib, json, math, os, re, subprocess, sys
 
 SKILL = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -195,7 +197,7 @@ class Project:
     # ---- layers
     def cutaway(self, cid, src_sec, a, b, name, zoom=(1, 1.08), fade=(None, None), cover=True, behind=None):
         """Full-frame b-roll from footage/<cid>.mp4 showing source second `src_sec` at reel frame `a`; widened by cover().
-        behind={"title": "ХЭЛЛОУИН", "kicker": "31.10", "at": 6, "until": 80, "mode": "auto"|"birefnet"|"person"|"subject"} puts the title
+        behind={"title": "TITLE", "kicker": "01.06", "at": 6, "until": 80, "mode": "auto"|"birefnet"|"person"|"subject"} puts the title
         BEHIND the person: person_matte.py cuts them out of the 2K proxy for exactly these frames (cached in public/mattes)."""
         na, nb = self.cover(a, b, name) if cover else (a, b)
         tb = self.trim(cid, src_sec) - (a - na)
@@ -228,7 +230,7 @@ class Project:
         """BlurPatch layers for a censored cut from censor_track.py's work/censor/*.json: per job and per segment of its clip
         that overlaps the job's source range, a blurred copy of the same proxy masked by the tracked ellipses, with the
         segment's own punch zoom and drift (work/timeline_zoom.json) and its N.xfade dissolve tail — the outgoing clip stays
-        on screen under the next one for those frames (Halloween: a joint showed for 7 frames after a cut). Writes
+        on screen under the next one for those frames, so the patch must cover them too. Writes
         reel/src/censorData.ts and returns the layers — put them FIRST in the body (under cards and captions).
         Speed-changed segments are skipped (blur them with a box job on a normal-speed range). Needs scenes/Censor.tsx."""
         import glob as _g
@@ -243,8 +245,8 @@ class Project:
                 tail = N["xfade"] / 30 if sg is not self.segs[-1] else 0.0
                 s_end = sg["srcStart"] + sg["srcDur"]
                 o0, o1 = max(a, sg["srcStart"]), min(b, s_end + tail)
-                # a job that reaches the clip's end holds its last ellipse through the dissolve tail (2026-11-13: a job
-                # ending 0.02 s before its clip left the lit joint visible for 8 frames under the next shot)
+                # a job that reaches the clip's end holds its last ellipse through the dissolve tail (a job ending a hair
+                # before its clip would leave the target visible under the next shot for the dissolve's frames)
                 hold_tail = s_end - 0.1 <= b < s_end + tail
                 if hold_tail: o1 = s_end + tail
                 if o1 - o0 < 0.05: continue
@@ -268,6 +270,27 @@ class Project:
         self.last = (na, nb)
         kids = children(na) if callable(children) else children
         return seq(na, nb, tag("Board", kids, fadeIn=fade[0], fadeOut=fade[1]), name, premount=True)
+
+    def comic_panel(self, a, b, src, name, full=False, cues=None, **props):
+        """A comic panel (scenes/ComicPanel.tsx, styles.md «comic») on [a, b): inset over the head in the taller free band
+        (pass top= / maxH= to place it yourself) or full=True instead of a cutaway (widened around cuts by cover()).
+        src = a generated plate in public/ (comic/p1.png) or a clip (footage/c0042.mp4 + trimBefore=R.trim(cid, sec)).
+        Props: balloon={lines, accent, cx, cy, rx, ry, tailX, tailY, at, kind}, box={text, x, y, at}, title={text, top, at},
+        words=[ComicWord], credit, ratio, rotate, focus. Cues inside are LOCAL frames of the (possibly widened) panel:
+        cues=lambda start: {"balloon": {..., "at": R.L(word, start)}} is merged into the props."""
+        if full: a, b = self.cover(a, b, name)
+        elif "top" not in props:
+            bands = [self.free_top(a, b), self.free_bottom(a, b)]
+            t, bt = max(bands, key=lambda z: z[1] - z[0]); props.update(top=t, maxH=bt - t)
+        if cues: props.update(cues(a))
+        if not full and props.get("maxH") is not None and props["maxH"] - N["comicShadow"] < N["comicPanelMinH"]:
+            self.log.append(f"STYLE BUDGET comic «{name}»: free band {props['maxH']} px < comicPanelMinH {N['comicPanelMinH']} + comicShadow — the panel is squeezed "
+                            "to fit; use full=True, another moment or top= / maxH= by hand")
+        n = b - a
+        if n < N["comicPanelMinFrames"]: self.log.append(f"comic «{name}»: {n} frames < comicPanelMinFrames {N['comicPanelMinFrames']} — the balloon cannot be read")
+        if n > N["comicPanelMaxFrames"]: self.log.append(f"comic «{name}»: {n} frames > comicPanelMaxFrames {N['comicPanelMaxFrames']} — split it or show real footage")
+        self.last = (a, b)
+        return seq(a, b, tag("ComicPanel", src=src, full=full or None, **props), name, premount=True)
 
     def chapter(self, cut, n, title, flash=True):
         """Flash on the cut, tag + whoosh N.chapterLead frames later."""
@@ -350,6 +373,8 @@ class Project:
         os.makedirs(os.path.dirname(out), exist_ok=True)
         open(out, "w").write(tsx)
         for line in self.log: print(line)
+        comics = jsx.count("<ComicPanel")
+        if comics > N["comicPanelsPerMin"] * max(reel / 1800, 0.5): print(f"STYLE BUDGET comic panels: {comics} in {reel / 30:.0f} s > comicPanelsPerMin {N['comicPanelsPerMin']} (styles.md «comic»)")
         print(f"wrote {path}: SPEECH_END {speech_end}, REEL_FRAMES {reel} ({reel / 30:.1f} s), {len(body)} layers")
         return reel
 

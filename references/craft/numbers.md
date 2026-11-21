@@ -60,7 +60,7 @@ Generated from `numbers.json` by `scripts/numbers_gen.py` — edit the JSON, not
 | `sfxBeep` | 0.3 | short electronic beep (a low battery, a warning) |  | Sfx kind=beep |
 | `sfxPowerdown` | 0.6 | falling tone (the camera dies, the end) |  | Sfx kind=powerdown |
 | `sfxReal` | 0.25 | a real recorded sound from sfx_find.py (Openverse), normalised to −20 LUFS — R.sfx(at, "real_<name>") | about as loud as the designed pops and whooshes at their levels | ui/Sfx.tsx, sfx_find.py |
-| `sfxVariants` | 3 | variants made of every whoosh / pop / hit (whoosh, whoosh2, whoosh3 …); reelgen.sfx cycles them | «одинаковый вжух на каждый переход — странно» — the same sample twice in a row reads as a template | make_sfx.sh, reelgen.sfx() |
+| `sfxVariants` | 3 | variants made of every whoosh / pop / hit (whoosh, whoosh2, whoosh3 …); reelgen.sfx cycles them | the same sample twice in a row reads as a template | make_sfx.sh, reelgen.sfx() |
 
 **Layout (px on 1080x1920)**
 
@@ -96,7 +96,7 @@ Generated from `numbers.json` by `scripts/numbers_gen.py` — edit the JSON, not
 | key | value | what | why | used by |
 |---|---|---|---|---|
 | `peopleFps` | 4 | frames per second people_zones.py samples from the source | a person crossing the frame in ~1 s is seen 4 times; 10 s of 4K scan in ≈ 3 s | people_zones.py --fps |
-| `peopleMinConf` | 0.3 | lowest Vision confidence for a person box | lower picks up posters and dark shapes | people_zones.py |
+| `peopleMinConf` | 0.3 | lowest confidence for a person box (set on Vision; recalibrate for another people engine) | lower picks up posters and dark shapes | people_zones.py |
 | `peopleFitMargin` | 0.9 | share of the crop width the chosen people may fill | a person touching both crop edges looks cut off | people_zones.py |
 | `peopleNearArea` | 0.25 | a second person joins the crop only if their box is ≥ this share of the main one | small background crowd must not pull the crop away from the subject | people_zones.py |
 | `peopleStickyArea` | 0.5 | the crop keeps its person while they are at least this share of the biggest one | a standing and a crouching person swap «biggest» every few frames; without stickiness the crop swings between them | people_zones.py |
@@ -109,7 +109,7 @@ Generated from `numbers.json` by `scripts/numbers_gen.py` — edit the JSON, not
 
 | key | value | what | why | used by |
 |---|---|---|---|---|
-| `snapBack` | 6.0 | a range that starts inside a sentence grows back to its start, at most this many seconds | «фразы обрезанные посередине» — a line that starts mid-thought reads as a mistake | cut_from_transcript.py |
+| `snapBack` | 6.0 | a range that starts inside a sentence grows back to its start, at most this many seconds | a line that starts or ends mid-thought reads as a mistake | cut_from_transcript.py |
 | `snapFwd` | 4.5 | a range that ends inside a sentence grows forward to its end, at most this many seconds | same; forward is shorter — the punchline is usually already in | cut_from_transcript.py |
 | `snapJoin` | 0.8 | a pause at least this long counts as a sentence edge even without .?!… (s) | the recognizer often drops the full stop of spoken Russian | cut_from_transcript.py |
 | `splitWindowSec` | 25 | ranges of one take further apart than this get their own alias proxy (s) | make_proxies encodes one window per clip: c0080 was 509 s of 4K for 70 s used | cut_from_transcript.py → make_proxies.py |
@@ -118,28 +118,28 @@ Generated from `numbers.json` by `scripts/numbers_gen.py` — edit the JSON, not
 
 | key | value | what | why | used by |
 |---|---|---|---|---|
-| `dualmicAtten` | 12 | DeepFilterNet noise reduction limit per lav channel (dB) | full strength left a hollow «из толчка» voice (A/B by ear) | dualmic.py |
+| `dualmicAtten` | 12 | DeepFilterNet noise reduction limit per lav channel (dB) | full strength leaves a hollow voice (A/B by ear) | dualmic.py |
 | `dualmicHard` | 3.0 | automix exponent: channel gain ∝ power^(this/2) share | pushes the far mic's late copy of a voice down (comb filtering) | dualmic.py |
 | `voiceTargetDb` | -22.0 | active speech level of every clip before the render's static gain (dBFS) | clips varied by up to 25 dB between cameras and mics | dialogue.py |
-| `voiceMaxGain` | 9.0 | most a quiet clip is lifted (dB) | +18 dB lifted mic hiss and DeepFilterNet artefacts into «a speaker about to blow» | dialogue.py |
+| `voiceMaxGain` | 9.0 | most a quiet clip is lifted (dB) | +18 dB lifts mic hiss and DeepFilterNet artefacts into a speaker-about-to-blow sound | dialogue.py |
 | `voiceSegLo` | -26.0 | a speech segment quieter than this is lifted (dBFS) | a whisper inside a loud clip | dialogue.py |
 | `voiceSegHi` | -19.0 | a speech segment louder than this is lowered (dBFS) | a shout inside a calm clip | dialogue.py |
 | `voiceSegMax` | 4.0 | most a single segment is moved (dB) | ±10 dB per segment pumped the noise floor | dialogue.py |
 | `ambDb` | -30.0 | camera sound under a picture beat ("amb"), active level (dBFS) | a dance or a ride in digital silence feels dead in a vlog without music | dialogue.py |
-| `ambRealtimeSpeed` | 1.5 | a picture beat sped up this much or more plays its camera sound in real time, not time-stretched | rides at ×12–×15 played their wind time-stretched — a grinding texture the user heard as a broken frame | dialogue.py |
+| `ambRealtimeSpeed` | 1.5 | a picture beat sped up this much or more plays its camera sound in real time, not time-stretched | rides at ×12–×15 with their wind time-stretched sound like a grinding texture, a broken file | dialogue.py |
 | `dropoutMs` | 40 | digital zeros inside a take longer than this (a radio-mic dropout, a voice window's edge) get room tone | a clip had 0.5 s of zeros in the source (lav dropout) — a hole of digital silence at the start of the beach scene | dialogue.py |
 | `rawDb` | -22.0 | camera sound instead of the voice ("raw") (dBFS) | DeepFilterNet swallowed a voice inside a costume | dialogue.py |
 | `declipMinSamples` | 20 | samples at |x| ≥ 0.985 before a source counts as clipped and gets adeclip | adeclip on clean audio still rewrote the samples (diff up to −34 dBFS) | voice_clean.py, dualmic.py |
 | `noiseTargetDb` | 48 | how far under the speech the residual noise should sit after cleanup (dB); DeepFilterNet's limit = this − the source SNR | full-strength DeepFilterNet turned every pause into digital silence (−69 dB) and cut −3 dB at 3.15 kHz out of the voice; a floor ≈ 48 dB down is inaudible under −16 LUFS speech and keeps the pauses natural | voice_clean.py |
 | `dfnMinAtten` | 6 | smallest DeepFilterNet limit used (dB); a source with SNR ≥ noiseTargetDb skips DeepFilterNet | a quiet room needs no neural cleanup — every pass costs some timbre | voice_clean.py |
-| `dfnMaxAtten` | 18 | largest DeepFilterNet limit (dB) | more than ≈ 18 dB pumps the noise between words and hollows the voice («из толчка», «underwater») | voice_clean.py |
+| `dfnMaxAtten` | 18 | largest DeepFilterNet limit (dB) | more than ≈ 18 dB pumps the noise between words and hollows the voice («underwater») | voice_clean.py |
 | `cutXfadeMs` | 10 | equal-power crossfade on every jump cut of the dialogue (ms, centred on the cut, from source handles) | a hard switch of the waveform clicks; 2–10 ms is the dialogue-editing norm, longer smears consonants | dialogue.py |
 | `joinXfadeMs` | 40 | linear crossfade where two segments continue the same take (a gain change, not a cut) |  | dialogue.py |
 | `hpfHz` | 80 | high-pass of the voice (12 dB/oct) | rumble, wind and lav handling noise live under the voice's fundamental (85–180 Hz) | voicelib.py |
 | `phaseRotHz` | 300 | centre of the phase rotator (4 all-pass sections, Q 0.7) after the high-pass | speech waveforms are lopsided (+0.92 / −0.71): rotating the phase lowers the peaks ≈ 2.5 dB without changing the spectrum (broadcast voice processing), so the limiter works less | voicelib.py |
 | `eqAmount` | 0.7 | share of the measured deviation from the target speech spectrum that the tonal EQ corrects | a partial match keeps the speaker's own timbre | voicelib.py |
 | `eqMaxCut` | 4.0 | deepest mud (315 Hz) / box (900 Hz) cut (dB) |  | voicelib.py |
-| `eqMaxBoost` | 4.0 | largest presence boost at 3.5 kHz (dB) | the DJI lav under clothing sat ~20 dB down at 2–5 kHz vs its 400–500 Hz peak: dull, «muffled» | voicelib.py |
+| `eqMaxBoost` | 4.0 | largest presence boost at 3.5 kHz (dB) | a lav under clothing sits ~20 dB down at 2–5 kHz vs its 400–500 Hz peak: dull, «muffled» | voicelib.py |
 | `eqMaxAir` | 3.0 | largest air boost (9 kHz shelf, dB) | more lifts the lav's hiss and the AAC artefacts of the camera track | voicelib.py |
 | `compOverDb` | 4.0 | the one compressor's threshold over the leveled speech (dB over voiceTargetDb) | three compressors/limiters in a row squeezed LRA from 8.5 to 2.6 LU; +2 dB / 2.5:1 on 10 ms frames still gave 3.9 LU, +4 / 2:1 / 30 ms gives 5.0 | voicelib.py |
 | `compRatio` | 2.0 | its ratio |  | voicelib.py |
@@ -155,11 +155,11 @@ Generated from `numbers.json` by `scripts/numbers_gen.py` — edit the JSON, not
 | `aacBitrate` | 320k | final AAC bitrate (the only lossy encode of the sound; Remotion renders PCM) | proxies 192k → Remotion 320k → final 192k = three extra generations on top of the camera's AAC | render.sh |
 | `lraMax` | 9.0 | audio_qa warns above this loudness range of the final mix (LU) |  | audio_qa.py |
 | `lraMin` | 3.0 | audio_qa warns below this (LU): over-compressed | a reel once shipped at 2.6 LU | audio_qa.py |
-| `expBelowDb` | 22.0 | optional expander (work/voice_tune.json «expander»): frames this far under the speech level are pulled down (dB) | on a podcast, room tails after words were the «эхо» the user heard; OFF unless the project asks | voicelib.py |
+| `expBelowDb` | 22.0 | optional expander (work/voice_tune.json «expander»): frames this far under the speech level are pulled down (dB) | room tails after words are heard as echo; OFF unless the project asks | voicelib.py |
 | `expRatio` | 2.5 | its downward ratio (1:x) |  | voicelib.py |
 | `expRangeDb` | 15.0 | its deepest reduction (dB) | deeper sounded gated | voicelib.py |
 | `notchMinDb` | 3.0 | a resonance (1/12-octave bump over the 1-octave trend) this high gets a narrow cut with «notches»: "auto" (dB) | a voice boomed on ≈ 110 / 215 / 320 Hz — narrow notches beat the broad 315 Hz cut | voicelib.py (notch_plan), voice_probe.py |
-| `notchMaxCut` | 4.5 | deepest automatic notch (dB, Q 3) | ep. 1's approved host EQ: −4.5 at 108 Hz | voicelib.py (notch_plan), voice_probe.py |
+| `notchMaxCut` | 4.5 | deepest automatic notch (dB, Q 3) | a typical approved voice notch: −4.5 at 108 Hz | voicelib.py (notch_plan), voice_probe.py |
 | `levelerAmount` | 0.6 | optional slow leveler inside a take (work/voice_tune.json «leveler»): share of the way to voiceTargetDb | a voice that wandered 7 dB (distance to the mic) LRA 9.9 → 5.8; OFF unless the project asks | dialogue.py, eq_test.py |
 | `levelerMaxDb` | 5.0 | its largest move (dB) | more lifted breaths and room | dialogue.py, eq_test.py |
 
@@ -171,7 +171,7 @@ Generated from `numbers.json` by `scripts/numbers_gen.py` — edit the JSON, not
 | `nightMedium` | 40 | … the medium lift | bar and porch clips: faces in the mud | night_lift.py |
 | `nightMild` | 50 | … the mild lift; brighter clips are untouched | a global grade washed out the day clips | night_lift.py |
 | `actionSlowmo` | 0.9 | a piece slower than this is retimed with motion-compensated interpolation (minterpolate) | the browser only repeats frames: 40 % slow motion of a 25 fps clip stuttered | actiongen.py |
-| `actionPhraseBars` | 4 | bars per musical phrase on the reel grid (whips and big moments go on phrase starts) | Cudi «Pursuit Of Happiness (Nightmare)»: sections every 4 bars from the drop (frames 218/468/718/967/1217) | track_beats.py, actiongen.py |
+| `actionPhraseBars` | 4 | bars per musical phrase on the reel grid (whips and big moments go on phrase starts) | pop and hip-hop tracks change sections every 4 bars from the drop | track_beats.py, actiongen.py |
 
 **Motion timing**
 
@@ -188,7 +188,7 @@ Generated from `numbers.json` by `scripts/numbers_gen.py` — edit the JSON, not
 
 | key | value | what | why | used by |
 |---|---|---|---|---|
-| `seamFxPerMin` | 3 | effect seams (anything but a dissolve / hard cut) per minute of a calm reel, at most | the user: «вжух на каждое действие» makes a terrible video — most cuts stay plain | gen_timeline.py budget check, transitions.md |
+| `seamFxPerMin` | 3 | effect seams (anything but a dissolve / hard cut) per minute of a calm reel, at most | an effect on every action makes a bad video — most cuts stay plain | gen_timeline.py budget check, transitions.md |
 | `seamFxGapCuts` | 3 | plain cuts between two effect seams, at least (calm reel) | alternation: an effect only reads against plain cuts around it | gen_timeline.py budget check |
 | `seamFxGapShots` | 4 | plain shots between two effect moments in an action reel (whip, crash, rgb, stutter, bump), at least — the drop and phrase starts excepted | same rule at action tempo | actiongen.py budget check |
 | `seamRepeatSec` | 20 | the same seam kind does not come back within this many seconds | a repeated trick turns into a template | gen_timeline.py, actiongen.py |
@@ -202,7 +202,7 @@ Generated from `numbers.json` by `scripts/numbers_gen.py` — edit the JSON, not
 | `seamBlurPx` | 18 | blur seam: defocus at the cut (px on the 1080 canvas) | both sides meet at the same blur | Clip.tsx |
 | `seamLeakOut` | 22 | leak seam: frames the warm light builds before the cut (ease-in) | hidden cut through a light leak, slower in than out | Clip.tsx |
 | `seamLeakIn` | 34 | leak seam: frames the light clears after the cut (ease-out) |  | Clip.tsx |
-| `seamLeakPeak` | 0.5 | leak seam: peak opacity of the warm gradients | the user: no super-bright transitions — @remotion/effects lightLeak fills the frame solid yellow at its peak, not used | Clip.tsx |
+| `seamLeakPeak` | 0.5 | leak seam: peak opacity of the warm gradients | no super-bright transitions — @remotion/effects lightLeak fills the frame solid yellow at its peak, not used | Clip.tsx |
 | `seamLeakLift` | 0.3 | leak seam: brightness lift of the picture at the peak | with contrast −20 %, saturation −15 % it reads as light, not a white flash | Clip.tsx |
 | `seamWipeFrames` | 14 | wipe seam: frames of a soft wipe in the reel's current (right → left) |  | Clip.tsx, seams.py |
 | `seamWipeFeather` | 0.16 | wipe seam: soft edge width (share of the canvas width) | a hard edge looks like a slideshow | Clip.tsx |
@@ -222,3 +222,17 @@ Generated from `numbers.json` by `scripts/numbers_gen.py` — edit the JSON, not
 | `stutterStep` | 3 | stutter into a drop: the picture advances every N frames | each step must move visibly or it reads as dropped frames | Action.tsx |
 | `bridgeTail` | 0.8 | L-cut: seconds the outgoing scene's own sound carries under the next picture (scene changes, bridge option) | OpenMontage edit-director: 0.5–1.5 s on the hardest seams | dialogue.py |
 | `bridgeLead` | 0.4 | J-cut: seconds the incoming scene's own sound starts before its picture |  | dialogue.py |
+
+**Styles (styles.md): comic panels, credits**
+
+| key | value | what | why | used by |
+|---|---|---|---|---|
+| `comicPanelsPerMin` | 4 | comic panels per minute when «comic» is the reel's style (as an accent in another style: 1–2 per reel) | a panel on every sentence turns the reel into a slideshow of pictures; the speaker must stay the reel | reelgen.py STYLE BUDGET, styles.md |
+| `comicPanelMinFrames` | 45 | shortest comic panel (frames) | a balloon of 3–6 words needs ≈ 1.5 s to be read | reelgen.py R.comic_panel |
+| `comicPanelMinH` | 240 | smallest inset comic panel height (px); a free band lower than this + comicShadow squeezes the panel | a lower panel cannot hold a readable picture and balloon — use full=True or another moment | ComicPanel.tsx, reelgen.py R.comic_panel |
+| `comicPanelMaxFrames` | 150 | longest comic panel (frames) | a still drawing over 5 s reads as a frozen video; longer beats get two panels or real footage | reelgen.py R.comic_panel |
+| `comicPanelIn` | 8 | panel pop-in (frames): scale 0.86 → 1.03 → 1 with the cyan / magenta frames converging | a panel lands like a page slapped down, not a slow fade | scenes/ComicPanel.tsx |
+| `comicPanelOut` | 6 | panel exit (frames) | exits are faster than entrances (motion-design.md) | scenes/ComicPanel.tsx |
+| `comicBorder` | 10 | ink frame of a comic panel (px) | thinner reads as a photo frame, thicker eats the picture at 1080 wide | scenes/ComicPanel.tsx |
+| `comicShadow` | 14 | hard offset shadow of a panel and a balloon (px, flat ink, no blur) | the print look of the covers; a soft shadow makes it a UI card again | scenes/ComicPanel.tsx |
+| `creditFontPx` | 28 | author credit on someone else's footage (px) | readable on a phone (minTextPx) yet quieter than the captions | scenes/Cards.tsx, scenes/BRoll.tsx (credit) |

@@ -1,7 +1,7 @@
 # A/B: let the user decide by ear and eye on a short stretch
 
 When it is not clear which of two or three options is better — a voice setting, a look, a caption style, a cut point, the
-music level — do not rebuild and render the whole reel per idea. Make one short file with every version of the SAME moment,
+music level, the reel's style (`styles.md`: one beat built in each, a `STYLE` switch in `gen_reel.py`) — do not rebuild and render the whole reel per idea. Make one short file with every version of the SAME moment,
 announced by beeps (and a numbered card in a video), send it, ask «1, 2 или 3?». The user decides; you write down the
 decision (NOTES.md, `work/voice_tune.json`, plan.json) and only then rebuild.
 

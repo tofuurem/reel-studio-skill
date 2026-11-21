@@ -71,7 +71,7 @@ export const N = {
   jpegQuality: 92, // Remotion frame JPEG quality
   // People-aware crop (16:9 camera → 9:16 canvas)
   peopleFps: 4, // frames per second people_zones.py samples from the source
-  peopleMinConf: 0.3, // lowest Vision confidence for a person box
+  peopleMinConf: 0.3, // lowest confidence for a person box (set on Vision; recalibrate for another people engine)
   peopleFitMargin: 0.9, // share of the crop width the chosen people may fill
   peopleNearArea: 0.25, // a second person joins the crop only if their box is ≥ this share of the main one
   peopleStickyArea: 0.5, // the crop keeps its person while they are at least this share of the biggest one
@@ -177,4 +177,14 @@ export const N = {
   stutterStep: 3, // stutter into a drop: the picture advances every N frames
   bridgeTail: 0.8, // L-cut: seconds the outgoing scene's own sound carries under the next picture (scene changes, bridge option)
   bridgeLead: 0.4, // J-cut: seconds the incoming scene's own sound starts before its picture
+  // Styles (styles.md): comic panels, credits
+  comicPanelsPerMin: 4, // comic panels per minute when «comic» is the reel's style (as an accent in another style: 1–2 per reel)
+  comicPanelMinFrames: 45, // shortest comic panel (frames)
+  comicPanelMinH: 240, // smallest inset comic panel height (px); a free band lower than this + comicShadow squeezes the panel
+  comicPanelMaxFrames: 150, // longest comic panel (frames)
+  comicPanelIn: 8, // panel pop-in (frames): scale 0.86 → 1.03 → 1 with the cyan / magenta frames converging
+  comicPanelOut: 6, // panel exit (frames)
+  comicBorder: 10, // ink frame of a comic panel (px)
+  comicShadow: 14, // hard offset shadow of a panel and a balloon (px, flat ink, no blur)
+  creditFontPx: 28, // author credit on someone else's footage (px)
 } as const;

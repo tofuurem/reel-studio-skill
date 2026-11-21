@@ -2,7 +2,7 @@
 """Frame-exact transparent cutout of the people in a video (VP9 WebM with alpha) for the "text behind the person" effect.
 
 Usage: work/venv/bin/python -I person_matte.py <in.mp4> <out.webm> [--from S] [--to S] [--mode auto|birefnet|person|subject]
-           [--feather PX] [--quality accurate|balanced] [--fps 30]
+           [--engine vision|birefnet] [--feather PX] [--quality accurate|balanced] [--fps 30]
 Layers in Remotion: base video -> title -> this cutout (<OffthreadVideo transparent src=out.webm/>), same size/fps/frames.
 --from/--to are seconds in the input; output frame N == input frame round(from*fps)+N (prints both frame counts).
 --mode birefnet: BiRefNet (MIT, ZhengPeng7/BiRefNet, torch on MPS/CUDA/CPU) — the person WITH what they wear and hold
@@ -11,9 +11,11 @@ Layers in Remotion: base video -> title -> this cutout (<OffthreadVideo transpar
                  so a small figure in a 16:9 frame still gets ~1000 px of model input. ≈ 0.7 s per frame on Apple Silicon;
                  the weights (≈ 420 MB) download once into ~/.cache/huggingface on the first run.
 --mode person  : Apple Vision person segmentation (macOS). Low-res, people only: over-ear headphones fall OUT of the mask
-                 (the title showed through the ear cups as a haze, reel_studio_skill hook, 2026-11-06).
---mode subject : Apple Vision foreground instance mask (macOS 14+) — missed the ear cups on that footage too.
---mode auto    : birefnet when torch + transformers import in this venv (deps.py installs them on macOS), else person.
+                 (a title behind the person shows through the ear cups as a haze).
+--mode subject : Apple Vision foreground instance mask (macOS 14+) — can miss the ear cups too.
+--mode auto    : the person_mask engine when one was chosen (--engine, REEL_STUDIO_ENGINE_PERSON_MASK, engines.py set:
+                 vision → person, birefnet → birefnet); otherwise birefnet when its packages are in this venv (deps.py
+                 installs them), else person. The models themselves live in engines.py (shared with cutout.py).
 Temporal: a per-frame model flickers at the edges, and a plain moving average leaves ghost trails when the person moves →
 the previous mask is blended in (0.4) only where the picture itself did not change (|frame − previous frame| small).
 Outputs: <out.webm>; <out>.mask.json {fps,width,height,from_frame,mode,crop,frames:[{coverage,bbox:[x0,y0,x1,y1]|null}]}
@@ -25,14 +27,14 @@ import sys, os, json, subprocess, argparse, time
 import numpy as np
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from common import add_guard_args, guard_reexec
-
-BIREFNET = ("ZhengPeng7/BiRefNet", "e2bf8e4460fc8fa32bba5ea4d94b3233d367b0e4")   # pinned: the repo ships its own model code
-MODEL_SIDE = 1024
+import engines
+from engines import BIREFNET, BIREFNET_SIDE as MODEL_SIDE, resize  # noqa: F401  (BIREFNET: the pinned revision, kept importable here)
 
 ap = argparse.ArgumentParser()
 ap.add_argument("src"); ap.add_argument("dst")
 ap.add_argument("--from", dest="t0", type=float, default=0.0); ap.add_argument("--to", dest="t1", type=float, default=None)
 ap.add_argument("--mode", choices=["auto", "birefnet", "person", "subject"], default="auto")
+ap.add_argument("--engine", choices=engines.ENGINES["person_mask"], help="person_mask engine: vision = --mode person, birefnet = --mode birefnet")
 ap.add_argument("--feather", type=float, default=None, help="px at 1080 wide (scaled with width); default 1 for birefnet, 2 for Vision")
 ap.add_argument("--quality", choices=["accurate", "balanced"], default="accurate", help="Vision person mode only")
 ap.add_argument("--fps", type=float, default=30.0)
@@ -42,18 +44,15 @@ add_guard_args(ap, 10.0)   # BiRefNet at 1024 px on MPS (unified memory)
 a = ap.parse_args(); guard_reexec(a)
 
 
-def has_torch():
-    try:
-        import torch, transformers  # noqa: F401
-        return True
-    except Exception:
-        return False
-
-
 mode = a.mode
-if mode == "auto": mode = "birefnet" if has_torch() else "person"
-if mode == "birefnet" and not has_torch(): sys.exit("person_matte --mode birefnet needs torch + transformers in this venv: python3 -I deps.py --install")
-if mode in ("person", "subject") and sys.platform != "darwin": sys.exit("Vision modes need macOS — use --mode birefnet")
+if a.engine: mode = "person" if a.engine == "vision" else "birefnet"
+if mode == "auto":
+    chosen, why = engines.choose_why("person_mask")
+    if why != "default": mode = "person" if chosen == "vision" else "birefnet"
+    else: mode = "birefnet" if not engines.missing("person_mask", "birefnet") else "person"
+_miss = engines.missing("person_mask", "birefnet" if mode == "birefnet" else "vision")
+if _miss and mode == "birefnet": sys.exit(f"person_matte --mode birefnet: {_miss} — python3 -I deps.py --install")
+if _miss: sys.exit(f"person_matte --mode {mode}: {_miss} — use --mode birefnet")
 feather = a.feather if a.feather is not None else (1.0 if mode == "birefnet" else 2.0)
 choke = a.choke if a.choke is not None else (0.15 if mode == "birefnet" else 0.0)
 
@@ -75,16 +74,6 @@ def decoder(select):
                              "-fps_mode", "passthrough", "-f", "rawvideo", "-pix_fmt", "rgb24", "-"], stdout=subprocess.PIPE)
 
 
-def resize(m, w, h):
-    """Bilinear resize with numpy (no PIL needed)."""
-    if m.shape == (h, w): return m
-    ys = np.clip((np.arange(h) + .5) * m.shape[0] / h - .5, 0, m.shape[0] - 1); xs = np.clip((np.arange(w) + .5) * m.shape[1] / w - .5, 0, m.shape[1] - 1)
-    y0, x0 = np.floor(ys).astype(int), np.floor(xs).astype(int); y1, x1 = np.minimum(y0 + 1, m.shape[0] - 1), np.minimum(x0 + 1, m.shape[1] - 1)
-    fy, fx = (ys - y0)[:, None], (xs - x0)[None, :]
-    top = m[y0][:, x0] * (1 - fx) + m[y0][:, x1] * fx; bot = m[y1][:, x0] * (1 - fx) + m[y1][:, x1] * fx
-    return top * (1 - fy) + bot * fy
-
-
 def blur(m, sigma):
     if sigma < .3: return m
     r = int(sigma * 3); k = np.exp(-(np.arange(-r, r + 1) ** 2) / (2 * sigma ** 2)); k /= k.sum()
@@ -98,59 +87,13 @@ def down(x, s):
 
 
 # ---------------------------------------------------------------- segmenters: RGB uint8 frame → float32 [0,1] mask (any size) or None
+# (engines.py: BiRefNet at the pinned revision on MPS / CUDA / CPU; Vision person segmentation / foreground instance mask)
 if mode == "birefnet":
-    import torch
-    from transformers import AutoModelForImageSegmentation
-    dev = "mps" if torch.backends.mps.is_available() else "cuda" if torch.cuda.is_available() else "cpu"
-    dtype = torch.float16 if dev != "cpu" else torch.float32
-    model = AutoModelForImageSegmentation.from_pretrained(BIREFNET[0], revision=BIREFNET[1], trust_remote_code=True).eval().to(dev).to(dtype)
-    MEAN = torch.tensor([0.485, 0.456, 0.406], device=dev).view(1, 3, 1, 1); STD = torch.tensor([0.229, 0.224, 0.225], device=dev).view(1, 3, 1, 1)
-
-    def birefnet(rgb):
-        """rgb HxWx3 uint8 → alpha HxW float32; the model runs at MODEL_SIDE² (BiRefNet's training size)."""
-        h, w = rgb.shape[:2]
-        x = torch.from_numpy(np.array(rgb)).to(dev).permute(2, 0, 1)[None].float() / 255
-        x = torch.nn.functional.interpolate(x, (MODEL_SIDE, MODEL_SIDE), mode="bilinear", align_corners=False, antialias=True)
-        with torch.no_grad():
-            p = model(((x - MEAN) / STD).to(dtype))[-1].float().sigmoid()
-        return torch.nn.functional.interpolate(p, (h, w), mode="bilinear", align_corners=False)[0, 0].clamp(0, 1).cpu().numpy()
+    engines.birefnet_model()   # load once, before the first frame
+    birefnet = engines.birefnet
 else:
-    import Vision, Quartz
-    cs = Quartz.CGColorSpaceCreateDeviceRGB()
-
-    def cgimage(buf, w, h):
-        prov = Quartz.CGDataProviderCreateWithData(None, buf, len(buf), None)
-        return Quartz.CGImageCreate(w, h, 8, 24, w * 3, cs, Quartz.kCGImageAlphaNone, prov, None, False, Quartz.kCGRenderingIntentDefault)
-
-    def pb_array(pb):
-        """CVPixelBuffer (8-bit or float32 one-component) -> float32 [0,1] array."""
-        Quartz.CVPixelBufferLockBaseAddress(pb, 1)
-        try:
-            w, h = Quartz.CVPixelBufferGetWidth(pb), Quartz.CVPixelBufferGetHeight(pb); bpr = Quartz.CVPixelBufferGetBytesPerRow(pb)
-            raw = bytes(Quartz.CVPixelBufferGetBaseAddress(pb).as_buffer(bpr * h))
-        finally: Quartz.CVPixelBufferUnlockBaseAddress(pb, 1)
-        if Quartz.CVPixelBufferGetPixelFormatType(pb) == 0x4C303066:  # 'L00f'
-            return np.frombuffer(raw, np.uint8).reshape(h, bpr)[:, :w * 4].copy().view(np.float32).reshape(h, w).clip(0, 1)
-        return np.frombuffer(raw, np.uint8).reshape(h, bpr)[:, :w].astype(np.float32) / 255.0
-
     def vision(rgb):
-        img = cgimage(rgb.tobytes(), rgb.shape[1], rgb.shape[0])
-        handler = Vision.VNImageRequestHandler.alloc().initWithCGImage_options_(img, None)
-        if mode == "person":
-            req = Vision.VNGeneratePersonSegmentationRequest.alloc().initWithCompletionHandler_(None)
-            req.setQualityLevel_(Vision.VNGeneratePersonSegmentationRequestQualityLevelAccurate if a.quality == "accurate"
-                                 else Vision.VNGeneratePersonSegmentationRequestQualityLevelBalanced)
-            ok, err = handler.performRequests_error_([req], None)
-            if not ok: sys.exit(f"vision failed: {err}")
-            res = req.results()
-            return pb_array(res[0].pixelBuffer()) if res else None
-        req = Vision.VNGenerateForegroundInstanceMaskRequest.alloc().init()
-        ok, err = handler.performRequests_error_([req], None)
-        if not ok: sys.exit(f"vision failed: {err}")
-        res = req.results()
-        if not res or len(res[0].allInstances()) == 0: return None
-        pb, err = res[0].generateScaledMaskForImageForInstances_fromRequestHandler_error_(res[0].allInstances(), handler, None)
-        return pb_array(pb) if pb is not None else None
+        return engines.vision_mask(rgb, "person" if mode == "person" else "subject", a.quality)
 
 
 def find_crop():

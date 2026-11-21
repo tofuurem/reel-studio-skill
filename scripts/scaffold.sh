@@ -11,12 +11,13 @@
 # Fonts: copied from ~/.cache/reel-studio/fonts (setup_env.sh) to reel/public/fonts — renders do not fetch Google Fonts.
 # External volume (another device than $HOME, e.g. exFAT): node_modules in ~/.cache/reel-studio/npmroot/<name>-<hash>, linked;
 #   never run npm inside reel/ there — it swaps the link for a real folder.
+[[ "${1:-}" == "-h" || "${1:-}" == "--help" ]] && { awk 'NR>1 && /^#/ {sub(/^# ?/, ""); print; next} NR>1 {exit}' "$0"; exit 0; }
 set -e; setopt null_glob
 RV=${REMOTION_VERSION:-4.0.534}
 P=${1:-.}; P=$(cd "$P" && pwd); T=$(cd "$(dirname "$0")/../assets/remotion-template" && pwd); FONTS=$HOME/.cache/reel-studio/fonts
 # node_modules lives on the volume of $HOME. A project on an external volume (exFAT: 1 MB clusters, so 24k files ≈ 24 GB;
 # and npm replaces a symlinked node_modules with a real folder) keeps it in ~/.cache/reel-studio/npmroot/<name>-<hash>/
-# behind the link reel/node_modules; npm runs THERE on a copy of reel/package*.json that is copied back (hermes-worker, 2026-11-06).
+# behind the link reel/node_modules; npm runs THERE on a copy of reel/package*.json that is copied back.
 EXT=$(python3 -I -c "import os,sys; print(1 if os.stat(sys.argv[1]).st_dev != os.stat(os.path.expanduser('~')).st_dev else 0)" "$P")
 NMROOT=""
 if [ "$EXT" = 1 ]; then

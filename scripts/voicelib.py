@@ -3,11 +3,13 @@
 it runs in work/dfvenv). Filters with a fixed shape (high-pass, bells, shelves, band-pass) are ffmpeg biquads run through
 a pipe; everything level-dependent (compressor, de-esser, limiter, leveling) is a gain curve on 10 ms / 2.5 ms frames.
 
-Why one module (2026-11-07 audit of the reel-studio reel): the voice went through adeclip on unclipped audio, full-strength
-DeepFilterNet (digital silence in every pause, −3 dB hole at 3.15 kHz), three compressors/limiters in a row (LRA 8.5 → 2.6 LU)
-and four AAC encodes — each script had its own idea of «clean». Now: restore once per source (voice_clean.py), then ONE
+Why one module: scripts that each clean on their own stack up — adeclip on unclipped audio, full-strength DeepFilterNet
+(digital silence in every pause, −3 dB hole at 3.15 kHz), three compressors/limiters in a row (LRA 8.5 → 2.6 LU) and four
+AAC encodes. Rule: restore once per source (voice_clean.py), then ONE
 chain over the whole dialogue (dialogue.py), then the master (render.sh). Every number is in numbers.json «Voice chain».
 """
+import sys as _sys
+if __name__ == "__main__" and ("-h" in _sys.argv[1:] or "--help" in _sys.argv[1:]): print(__doc__); _sys.exit(0)   # usage, no side effects
 import json, os, subprocess, sys
 import numpy as np
 
@@ -167,7 +169,7 @@ def transfer(before, after):
     sp = active_db(before[:n]); keep = db((b ** 2).mean(1)) > (sp if sp is not None else -40) - 10
     if keep.sum() < 4: return {}
     # EVERY active frame, in chunks (bounded memory). The old ≤ 1500-frame sample swung ±2 dB at 5–8 kHz on the SAME audio
-    # (sibilants are rare) — false «band moved > 2 dB» warnings and missed real ones (a podcast edit ep. 1, 2026-11-13)
+    # (sibilants are rare) — false «band moved > 2 dB» warnings and missed real ones
     w = np.hanning(nfft); idx = np.flatnonzero(keep); sb = np.zeros(nfft // 2 + 1); sa = np.zeros(nfft // 2 + 1)
     for i in range(0, len(idx), 1000):
         j = idx[i:i + 1000]
@@ -305,12 +307,12 @@ def voice_chain(x, level_db=None, tune=None):
     return x, rep
 
 
-# ---------------------------------------------------------------- optional voice tools (from a podcast edit, 2026-11-13)
+# ---------------------------------------------------------------- optional voice tools
 
 def expand(x, below=22.0, ratio=2.5, range_db=15.0, hop=HOP):
     """Downward expander keyed by the voice's OWN level: frames more than `below` dB under the speech are pulled down
     (1:ratio, at most range_db) — room tails («эхо») and cleanup leftovers between words. Opens in ≈ 5 ms with a 20 ms
-    look-ahead, closes in ≈ 60 ms. Podcast ep. 1: with full DeepFilterNet it removed what the user heard as echo."""
+    look-ahead, closes in ≈ 60 ms. With full DeepFilterNet it removes room tails heard as echo."""
     sp = active_db(x)
     if sp is None: return x, {}
     L = db(frame_power(x, hop)); thr = sp - below
@@ -323,7 +325,7 @@ def expand(x, below=22.0, ratio=2.5, range_db=15.0, hop=HOP):
 def leveler(x, target, amount=0.6, max_db=5.0, win_ms=400, att_ms=250, rel_ms=900, hop=HOP):
     """Slow speech leveler (adaptive AGC inside a take): the speech level around each moment (400 ms, active frames only) is
     pulled `amount` of the way to `target` (≤ ±max_db); 0.25 s down / 0.9 s up, HELD through pauses (no noise pumping).
-    Podcast ep. 1: a voice that wandered 7 dB (distance to the mic) went from LRA 9.9 to 5.8 LU."""
+    Example: a voice that wanders 7 dB (distance to the mic) goes from LRA 9.9 to 5.8 LU."""
     L = db(frame_power(x, hop)); act = L > target - 20
     k = max(1, int(win_ms / 10)); ker = np.ones(k)
     pw = np.convolve(np.where(act, 10 ** (L / 10), 0.0), ker, "same"); na = np.convolve(act.astype(float), ker, "same")
@@ -342,7 +344,7 @@ def leveler(x, target, amount=0.6, max_db=5.0, win_ms=400, att_ms=250, rel_ms=90
 
 def resonances(x, lo=60, hi=1200, nfft=16384):
     """Narrow bumps of a voice: 1/12-octave level over the 1-octave trend, on the louder 60 % of frames.
-    → [(Hz, dB over the trend)] per range 60–200 / 200–500 / 500–1200 Hz. A podcast edit: the same speaker (one host) showed
+    → [(Hz, dB over the trend)] per range 60–200 / 200–500 / 500–1200 Hz. Example: one speaker can show
     108 / 214 / 320 Hz on one mic and 61 (room) / 110 / 219 / 320 Hz on another — «гудит» lives on a few narrow peaks."""
     k = len(x) // nfft
     if k < 4: return []
@@ -364,8 +366,8 @@ def resonances(x, lo=60, hi=1200, nfft=16384):
 
 def notch_plan(x, min_db=None, max_cut=None):
     """Narrow cuts (Q 3) on the resonances that stick out by ≥ numbers.json notchMinDb, depth = the bump (≤ notchMaxCut).
-    Narrow notches beat broad shelves: a wide cut thins the voice (a podcast edit, one host: centroid 396 → 693 Hz with
-    108 / 214 Hz notches). Returns (ffmpeg filter string or "", the measured resonances)."""
+    Narrow notches beat broad shelves: a wide cut thins the voice (e.g. centroid 396 → 693 Hz where
+    108 / 214 Hz notches were enough). Returns (ffmpeg filter string or "", the measured resonances)."""
     min_db = N["notchMinDb"] if min_db is None else min_db; max_cut = N["notchMaxCut"] if max_cut is None else max_cut
     res = resonances(x); eqs = [f"equalizer=f={f}:t=q:w=3:g={-min(b, max_cut):.1f}" for f, b in res if b >= min_db and f < 500]
     return ",".join(eqs), res

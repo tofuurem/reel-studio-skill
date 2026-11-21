@@ -1,4 +1,4 @@
-# A censored version (same cut, more «культурная»)
+# A censored version (same cut, family-safe)
 
 For a second version of a finished video that family or a platform will see. Keep it long and whole — not a shorter cut.
 Nothing is cut: words are bleeped, captions masked, things in the picture blurred. The uncensored version keeps its own
@@ -10,8 +10,8 @@ asterisks — asterisks only ever mirror bleeps.
 
 1. **Words.** Keep `cut_from_transcript.py`'s swear list (copy `work/bleeps.json` before the uncensored cut empties it), then
    `python3 -I $S/censor_bleeps.py <project> --swears <that copy>` → `work/bleeps_censored.json`: the swears + rude words
-   `swear.py` does not count («сука», «наркоман») + weed and mushroom talk («курим», «накуривается», «косяки», «грибов»);
-   `--no-drugs` for swears only. Extend `CENSOR_WORDS` / `DRUG_WORDS` there when the user names more.
+   `swear.py` does not count (`CENSOR_WORDS`) + the topic words the user lists for this video, one regex per line in
+   `work/censor_words.txt` (`EXTRA_WORDS`); `--no-extra` for swears only. Add a line there when the user names more.
    Padding and merging in the scripts: a swear spans the word −0.2 / +0.28 s, clamped to the voice's speech run, at least
    0.25 s (`cut_from_transcript.py`, `bleeps_from_timeline.py`); censor_bleeps.py's extra words span −0.1 / +0.2 s
    (capped by the word's length); every script merges bleeps closer than 350 ms.
@@ -31,30 +31,30 @@ asterisks — asterisks only ever mirror bleeps.
    by TIME: every caption word whose middle lies inside a bleep span, nothing else — then the two always agree. Build the
    caption words on the same GigaAM transcript the bleeps are timed from; never swap single words between two recognizers
    by time (it puts swears on the wrong words).
-4. **Picture.** Blur the joint itself, nothing else: no blanket `hands` jobs (they blur every hand near a face — a mic, a
-   phone); an ordinary cigarette stays unless the user says so — ask. Signs (`sign` for neon leaf signs, `box` with
-   keyframes for a leaf painted on a wall) only when the user wants signs blurred at all.
-   - **Find every joint first.** A 1 s contact sheet of the uncensored render over every scene the transcript flags, plus a
+4. **Picture.** Blur the object itself, nothing else: no blanket `hands` jobs (they blur every hand near a face — a mic, a
+   phone); anything the user did not list stays — ask. Signs (`sign` for neon signs, `box` with keyframes for a logo
+   painted on a wall) only when the user wants signs blurred at all.
+   - **Find every occurrence first.** A 1 s contact sheet of the uncensored render over every scene the transcript flags, plus a
      3 s sheet of the whole video for what nobody talks about (signs, wall art). For a long video split the render into
      4-minute ranges and give each to a subagent with labelled 1 s contact sheets (`sheets.py`-style tiles with the time
-     burnt in) and full-res zooms, asking for start–end, who, where in the frame and what (in hand / at the mouth / smoke),
-     plus the look-alikes (a DJI mic at the mouth, a phone, a straw, a can). Check people at the frame edges and smoking
-     through a costume's mouth hole. Verify each finding yourself on a zoom.
+     burnt in) and full-res zooms, asking for start–end, who, where in the frame and what (in hand / at the mouth / on a wall),
+     plus the look-alikes (a mic at the mouth, a phone, a straw, a can). Check people at the frame edges and faces
+     half hidden by a costume or a mask. Verify each finding yourself on a zoom.
    - **One `follow` job per finding**: read keys off `censor_track.py <project> --grid <clip> <a> <b> 0.25` (source frames
-     with a 10 % grid), radius ≈ 1.5× the joint + fingers (only the inner 60 % is blurred fully — the yellow ring on the
-     track sheet); split a scene into several jobs where the joint leaves the frame.
-   - **Keys go on the joint, not on the hand**: `"snap": true` pulls the centre onto the Vision hand, which leaves a joint
-     held in the lips, sticking up out of a fist or a lit tip beside the fingers outside the blur. Use `"snap": false` with
-     keys every 0.1–0.15 s on the joint's middle wherever it is at the mouth or held up; keep snap only for a joint inside a
-     moving hand.
-   - A job whose joint is still there when its clip ends runs through the clip's dissolve tail (segment end + 7 frames):
+     with a 10 % grid), radius ≈ 1.5× the object + fingers (only the inner 60 % is blurred fully — the yellow ring on the
+     track sheet); split a scene into several jobs where the object leaves the frame.
+   - **Keys go on the object, not on the hand**: `"snap": true` pulls the centre onto the detected hand (engines.py hands), which leaves an object
+     held in the lips, sticking up out of a fist or beside the fingers outside the blur. Use `"snap": false` with
+     keys every 0.1–0.15 s on the object's middle wherever it is at the mouth or held up; keep snap only for an object
+     inside a moving hand.
+   - A job whose object is still there when its clip ends runs through the clip's dissolve tail (segment end + 7 frames):
      `censor_blurs()` holds the last ellipse there, but only when the job reaches the clip's end.
    - Run `work/venv/bin/python -I $S/censor_track.py <project>` and look at EVERY `work/stills/censor/track_*.jpg`. Then in
      `gen_reel.py`: `body = R.censor_blurs() + body` (BlurPatch layers, `scenes/Censor.tsx`, a 28 px blur inside soft
      ellipses; tracks in `reel/src/censorData.ts`).
-5. **QA on the rendered file, densely** — mid-patch stills miss joints. Diff the censored render against the uncensored one
+5. **QA on the rendered file, densely** — mid-patch stills miss the target between them. Diff the censored render against the uncensored one
    (same cut, same captions → the difference IS the blur) and crop around it every 0.2 s from 1.5 s before to 1.5 s after
    each patch: `assets/examples/blur_sweep.example.py` (also takes a partial check render with `--offset`). Look at every
-   tile for a joint outside the blur, at the dissolve frames too, then render only the fixed ranges
+   tile for the target outside the blur, at the dissolve frames too, then render only the fixed ranges
    (`npx remotion render Reel2K out/demo/x.mp4 --frames=a-b`) and sweep them before the full render. Render to
    `<name>_censored.mp4`; both versions go to the user.

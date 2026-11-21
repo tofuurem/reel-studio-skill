@@ -1,19 +1,26 @@
-"""Head tracks for the name tags (v5, 2026-11-09: «кто это именно, хотя бы первый раз») → work/names/<job>.json.
+"""Head tracks for the name tags (who is talking, at least the first time each person appears) → work/names/<job>.json.
 
-Usage: work/venv/bin/python -I name_tracks.py <project>      (jobs: work/name_jobs.json) → NAME_TRACKS_DONE
+Usage: work/venv/bin/python -I name_tracks.py <project> [--engine vision|yunet]      (jobs: work/name_jobs.json) → NAME_TRACKS_DONE
 Then in gen_reel.py: per work/names/<id>.json a <NameTag> (scenes/NameTag.tsx) in a Sequence over its segment, with the
 segment's punch / drift from work/timeline_zoom.json (like BlurPatch) — see craft/scenes.md «Who is who».
 Job: {"id", "name", "role"?, "clip", "src": [a, b] (source s), "hint": [x, y] — the head at a (0–1 of the frame),
       "place"?: "above" (default) | "below" | "left" | "right" (a head near the top edge: beside it),
-      "keys"?: [[t, cx, top, w, h], …] instead of Vision (a helmet hides the face)}
-Apple Vision faces on the 1080 proxy at 15 fps: the face nearest the hint, then the one nearest the last position (a jump
+      "keys"?: [[t, cx, top, w, h], …] instead of face detection (a helmet hides the face)}
+Faces (engines.py: Apple Vision on macOS, YuNet elsewhere; --engine) on the 1080 proxy at 15 fps: the face nearest the hint, then the one nearest the last position (a jump
 over 0.15 of the frame is someone else → hold); missing frames hold; a 5-frame moving average takes the jitter out.
 Writes {clip, src, fps, box: [[cx, top, w, h]…], below} (below = the head is near the top: the tag goes under the chin) and
 work/stills/names/<job>.jpg with the boxes drawn.
 """
+import sys as _sys
+if __name__ == "__main__" and ("-h" in _sys.argv[1:] or "--help" in _sys.argv[1:]): print(__doc__); _sys.exit(0)   # usage, no side effects
 import glob, json, os, subprocess, sys, tempfile
 import numpy as np
 from PIL import Image, ImageDraw
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import engines
+ENGINE = None
+if "--engine" in sys.argv:
+    i = sys.argv.index("--engine"); ENGINE = sys.argv[i + 1] if i + 1 < len(sys.argv) else None; del sys.argv[i:i + 2]
 if len(sys.argv) < 2 or not os.path.isdir(sys.argv[1]): sys.exit(__doc__)
 os.chdir(sys.argv[1])
 FPS = 15; W, H = 960, 540
@@ -33,16 +40,11 @@ def frames(job, tmp):
                     "-vf", f"fps={FPS},scale={W}:{H}", "-q:v", "3", os.path.join(tmp, "%05d.jpg")], check=True)
     return sorted(glob.glob(os.path.join(tmp, "*.jpg")))
 
+_ENG = []
 def faces(path):
-    import Vision, Quartz
-    from Foundation import NSURL
-    s = Quartz.CGImageSourceCreateWithURL(NSURL.fileURLWithPath_(path), None); img = Quartz.CGImageSourceCreateImageAtIndex(s, 0, None)
-    fr = Vision.VNDetectFaceRectanglesRequest.alloc().init()
-    Vision.VNImageRequestHandler.alloc().initWithCGImage_options_(img, None).performRequests_error_([fr], None)
-    out = []
-    for r in fr.results() or []:
-        b = r.boundingBox(); out.append((b.origin.x + b.size.width / 2, 1 - b.origin.y - b.size.height, b.size.width, b.size.height))
-    return out
+    """[(centre x, top, w, h)] of every face, 0–1 of the frame (engines.py)."""
+    if not _ENG: _ENG.append(engines.require("faces", "name_tracks.py", ENGINE))
+    return [(f["x"] + f["w"] / 2, f["y"], f["w"], f["h"]) for f in engines.faces(path, _ENG[0])]
 
 os.makedirs("work/names", exist_ok=True); os.makedirs("work/stills/names", exist_ok=True)
 for job in json.load(open("work/name_jobs.json")):

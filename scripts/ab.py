@@ -6,8 +6,8 @@ Usage: work/dfvenv/bin/python -I ab.py <out.mp3> <file>[@start:dur] <file>[@star
                                        [--lufs -16] [--after <file>@start:dur]
   start / dur in seconds of that file; --after plays this clip after EVERY version (the next words, the music drop) —
   compare in context, not in isolation. Prints the legend (1 = …, 2 = …) and AB_DONE.
-Why: a podcast edit ep. 2 (2026-11-13) — the user decided voices, stingers and the guest's mic by ear from such files; a
-variant that won as a 30-s A/B still failed inside the episode, so keep --after (or a stretch with a cut) for decisions
+Rule: decide voices, stingers and mics by ear from such files; a variant that wins as a 30-s A/B can still fail inside
+the whole piece, so keep --after (or a stretch with a cut) for decisions
 that live at a transition. Craft: references/craft/ab.md. Video versions: ab_video.py.
 """
 import argparse, os, subprocess, sys, tempfile

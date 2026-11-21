@@ -175,7 +175,7 @@ if os.path.isdir(src_dir):
     for f in glob.glob(os.path.join(src_dir, "**/*.ts*"), recursive=True):
         if os.path.basename(f) in (TALK if ACTION else ACT): continue
         t = open(f, encoding="utf-8").read()
-        # comments are no references: blocks/BeforeAfter.tsx documents «"screens/old.png"» and stopped every render (Halloween v4)
+        # comments are no references: blocks/BeforeAfter.tsx documents «"screens/old.png"», which must not stop a render
         t = re.sub(r"(?m)^\s*//[^\n]*|\s//\s[^\n]*", "", re.sub(r"/\*.*?\*/", "", t, flags=re.S))
         found = set(re.findall(r"""staticFile\(\s*["'`]([^"'`$]+)["'`]\s*\)""", t))
         found |= {r for r in re.findall(r"""["'`]((?:footage|screens|audio|captions|covers|fonts)/[^"'`$\s]+\.\w{2,5})["'`]""", t)}
@@ -237,9 +237,11 @@ if cl and not silent and any(is_camera(s) for s in cl["sources"]):
 # ---------------------------------------------------------------- dialogue stem (dialogue.py)
 dts, dwav = pj("reel/src/dialogueSrc.ts"), pj("reel/public/audio/dialogue.wav")
 stem_on = bool(os.path.exists(dts) and re.search(r'DIALOGUE[^=]*=\s*"', open(dts).read()))
+if stem_on:   # the stem the reel actually plays (a censored cut has its own: dialogue.py --out …_censored.wav)
+    _m = re.search(r'DIALOGUE[^=]*=\s*"([^"]+)"', open(dts).read()); dwav = pj("reel/public", _m.group(1)) if _m else dwav
 if cl and not silent and os.path.isdir(src_dir):
     if not os.path.exists(os.path.join(src_dir, "Dialogue.tsx")):
-        add("WARN", "audio", "reel/src has no Dialogue.tsx (scaffolded before 2026-11-07): the voice plays from the proxies, cut hard and encoded twice — copy Dialogue.tsx, dialogueSrc.ts and Clip.tsx from the template, then dialogue.py")
+        add("WARN", "audio", "reel/src has no Dialogue.tsx (scaffolded from an older template): the voice plays from the proxies, cut hard and encoded twice — copy Dialogue.tsx, dialogueSrc.ts and Clip.tsx from the template, then dialogue.py")
     elif not stem_on or not os.path.exists(dwav):
         add("WARN", "audio", "no dialogue stem — the voice plays from the proxies"); nxt("work/dfvenv/bin/python -I $S/dialogue.py <project>")
     else:

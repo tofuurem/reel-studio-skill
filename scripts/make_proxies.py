@@ -19,15 +19,17 @@ Usage:
   or the draft's LUT; otherwise none (Rec.709 assumed). Chrome cannot colour-manage log footage.
   An HDR source (HLG / PQ — iPhone «HDR video», Android HDR10, a camera in HLG mode; any kind) gets the HDR → Rec.709 LUT from
   hdr_lut.py instead (fitted to Apple's own conversion): tagged bt709 without it, HLG looks grey, flat and pale.
+- Sources whose rate is not a multiple of 30 (50 fps) are blended to 30 (framerate filter, manifest «fpsconv»), not
+  decimated: dropping frames 2-1-2-2-1 made fast POV runs stutter.
 - `-map 0:v:0` because DJI files carry a second (preview) video stream that breaks muxing.
 - With --voice-dir the isolated-voice WAV replaces the camera track (same length, so sync is kept).
 - --trim-to-cutlist PAD encodes only the used part of each source (± PAD s; speed-changed CapCut segments use their source
   duration). Offsets go to work/proxy_offsets.json; gen_timeline / transcribe / face_zones subtract them. --extra b-roll can be
   windowed too: `clip.MP4@12.5-30` (then BRoll trimBefore = (source s − offset) × 30, offsets are in proxy_offsets.json too).
   --extra files are muted; 29.97/59.94 fps b-roll is retimed to 30 without duplicate frames.
-- Each folder keeps `.manifest.json` {clipId: {src, start, end, voice, voice_mtime, lut, crf, res, kind, speed, crop}}: a proxy is
+- Each folder keeps `.manifest.json` {clipId: {src, start, end, voice, voice_mtime, lut, crf, res, kind, speed, crop, fpsconv}}: a proxy is
   re-encoded when ANY of it changed (a window that grew or moved, voice file, LUT, CRF) or its duration does not match — not only
-  when the window start moved (audit 2026-10-22: a longer window, a new --voice-dir, a 1080-only re-run all used to be skipped).
+  when the window start moved (a longer window, a new --voice-dir, a 1080-only re-run all count).
   When ONLY the voice changed (a dualmic / voice_clean re-run), the video stream is copied and the new voice remuxed (REMUX).
   A window that only SHRANK inside the old one keeps the proxies (and the old offset) in both folders.
 - Writes go to work/tmp first and are verified (ffprobe duration) before they replace the proxy: no half files in public/.
@@ -74,13 +76,22 @@ ex_win = {p: (s, e) for p, s, e in extras}; ex_set = set(ex_win)
 lut_map = load_lut_map(a.lut_map); draft_lut = a.lut or next((p for p in cl.get("luts", {}).values() if p), None)
 main_segs = [s for s in cl["main"] if s.get("materialType", "video") == "video"]
 
+def needs_blend(info, broll):
+    """50 fps (action cams) → 30 by dropping frames steps 2-1-2-2-1 source frames: every third output frame moves half
+    as far, and a fast POV run (skiing, cycling) visibly stutters.
+    The framerate filter blends the in-between frames instead — even motion, a touch of motion blur. 60 / 120 fps divide
+    evenly, NTSC b-roll is retimed (setpts) — neither needs it."""
+    fps = info.get("fps") or 0
+    if fps <= 30.5 or (broll and (abs(fps - 30000 / 1001) < 0.01 or abs(fps - 60000 / 1001) < 0.02)): return False
+    return abs(fps / 30 - round(fps / 30)) > 0.02
+
 def same(o, n):
     if not o: return ["no manifest entry"]
     diff = []
-    for k in ("src", "start", "end", "voice", "voice_mtime", "lut", "crf", "res", "kind", "crop"):
+    for k in ("src", "start", "end", "voice", "voice_mtime", "lut", "crf", "res", "kind", "crop", "fpsconv"):
         x, y = o.get(k), n.get(k)
         if k in ("src", "voice") and x and y and x != y and os.path.basename(x) == os.path.basename(y) and not os.path.exists(x):
-            continue   # the project (or the volume) moved: same file name, the old path is gone — not a new source (Halloween v4: an archived project re-encoded everything)
+            continue   # the project (or the volume) moved: same file name, the old path is gone — not a new source (an archived project must not re-encode everything)
         if isinstance(x, float) or isinstance(y, float):
             if x is None or y is None or abs(float(x) - float(y)) > 0.01: diff.append(f"{k} {x}→{y}")
         elif x != y:
@@ -120,7 +131,8 @@ for src in srcs:
     entry = {"src": nfc(os.path.abspath(src)), "start": round(rng[0], 3) if rng else 0.0, "end": round(rng[1], 3) if rng else round(info["dur"], 3),
              "voice": nfc(os.path.abspath(voice)) if voice else None, "voice_mtime": int(os.path.getmtime(voice)) if voice else None,
              "lut": lut, "crf": a.crf, "kind": "broll" if broll else ("camera" if is_camera(src) else "screen"),
-             "speed": max([float(s.get("speed", 1) or 1) for s in segs] or [1.0]), "crop": crop_sig(KEYS.get(cid))}
+             "speed": max([float(s.get("speed", 1) or 1) for s in segs] or [1.0]), "crop": crop_sig(KEYS.get(cid)),
+             "fpsconv": "blend" if needs_blend(info, broll) else None}
     plan.append((src, cid, info, rng, entry, why))
 
 if nolut:
@@ -175,7 +187,7 @@ for src, cid, info, rng, entry, why in plan:
         if not diff and os.path.exists(out): print(f"ok {cid} {r} (manifest matches)"); continue
         if diff and e["voice"] and os.path.exists(out) and all(d.startswith(("voice ", "voice_mtime ")) for d in diff):
             # only the restored voice changed (dualmic / voice_clean re-run): copy the video stream, remux the new voice —
-            # Halloween v4: a new voice chain would otherwise re-encode 40 min of 4K (≈ 2 h) for a picture that did not change
+            # a new voice chain would otherwise re-encode 40 min of 4K (≈ 2 h) for a picture that did not change
             tmp = tmp_for(out, TMP); want = e["end"] - e["start"]
             rc = ffmpeg(["-loglevel", "error", "-i", out, "-ss", f"{e['start']:.3f}", "-to", f"{e['end']:.3f}", "-i", e["voice"], "-map", "0:v:0", "-c:v", "copy",
                          "-map", "1:a", "-c:a", "aac", "-b:a", "192k", "-ar", "48000", "-shortest", "-movflags", "+faststart", tmp])
@@ -194,7 +206,7 @@ for src, cid, info, rng, entry, why in plan:
     # one decode: the largest size is scaled (+ LUT) once, the smaller one is scaled down from it
     todo.sort(key=lambda t: -t[1])
     r0, W0, H0, _, _ = todo[0]
-    fc = f"[0:v:0]{vchain(W0, H0, cam, ntsc, entry['lut'], KEYS.get(cid), rng[0] if rng else 0.0, info)},format=yuv420p" + (f",split={len(todo)}" + "".join(f"[s{k}]" for k in range(len(todo))) if len(todo) > 1 else "[s0]")
+    fc = f"[0:v:0]{vchain(W0, H0, cam, ntsc, entry['lut'], KEYS.get(cid), rng[0] if rng else 0.0, info)},format=yuv420p" + (",framerate=fps=30" if entry["fpsconv"] == "blend" else "") + (f",split={len(todo)}" + "".join(f"[s{k}]" for k in range(len(todo))) if len(todo) > 1 else "[s0]")
     for k, (r, W, H, out, e) in enumerate(todo):
         if k > 0: fc += f";[s{k}]scale={W}:{H if cam else -2}:flags=lanczos[v{k}]"
     fc = fc.replace("[s0]", "[v0]", 1) if len(todo) == 1 else fc + f";[s0]null[v0]"

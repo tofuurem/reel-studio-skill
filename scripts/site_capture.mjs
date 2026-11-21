@@ -1,5 +1,4 @@
-// Record a public web page for b-roll when the user gives a URL instead of a screen recording (hermes-worker reel,
-// 2026-11-06: the challenge's own screen recording did not exist; the landing page was captured here instead).
+// Record a public web page for b-roll when the user gives a URL instead of a screen recording.
 //
 // Usage: node site_capture.mjs <project> <url> [--name site] [--size 1920x1080] [--scale 1.3333] [--mobile]
 //                              [--hero 14] [--scroll 11] [--chrome <binary>]

@@ -7,6 +7,7 @@
 # 2. links the envs into <project>/work, copies LUTs and fonts.
 # First run downloads: the env packages (≈ 1 GB with torch), the three template fonts (≈ 2 MB, Google Fonts on GitHub);
 # later, on first use: the GigaAM v3 ONNX model (≈ 1 GB) and Silero VAD (≈ 2 MB) from Hugging Face (first transcribe_gigaam.py), and the DeepFilterNet model (≈ 8 MB, first voice_isolate.sh).
+[[ "${1:-}" == "-h" || "${1:-}" == "--help" ]] && { awk 'NR>1 && /^#/ {sub(/^# ?/, ""); print; next} NR>1 {exit}' "$0"; exit 0; }
 set -e; setopt null_glob
 P=${1:-.}; mkdir -p "$P/work"
 CACHE=$HOME/.cache/reel-studio; mkdir -p "$CACHE"

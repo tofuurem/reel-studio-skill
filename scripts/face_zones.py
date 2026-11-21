@@ -1,26 +1,28 @@
 #!/usr/bin/env python3
-"""Where is the face in each shot? (macOS Vision) → tells you where graphics may go.
+"""Where is the face in each shot? (engines.faces: Apple Vision on macOS, YuNet elsewhere) → tells you where graphics may go.
 
 Usage: work/venv/bin/python -I face_zones.py [--cutlist work/cutlist.json] [--public reel/public] [--out work/face_zones.json] [--zoom work/timeline_zoom.json]
+           [--engine vision|yunet]
 
 For every main-track segment it grabs frames at 20/50/80 % of the segment (source time, so speed-changed CapCut segments
-sample the right seconds) from the 1080 proxy, runs VNDetectFaceRectanglesRequest and reports the face box plus the free
+sample the right seconds) from the 1080 proxy, runs the face detector (engines.py) and reports the face box plus the free
 vertical bands. All numbers in face_zones.json are FINAL SCREEN coordinates (1080x1920): each box is mapped the way Clip.tsx
 places the clip — fitted to the canvas (cover, or contain / the CapCut crop region), the user's CapCut framing (scale, flip,
 rotation, then the x / y offset in half-canvas units, y up), then the punch zoom + drift around the zoom origin (punchCenterY)
 — all read from work/timeline_zoom.json (gen_timeline.py). A 1.2–1.3 punch moves a face ~100 px, and cards placed from
-unzoomed boxes landed on chins (birthday reel).
+unzoomed boxes land on chins.
 Bands start at numbers.json cardTop (y 300, below the chapter tag) and end at bandBottom (y 1350, above the captions).
 Muted b-roll / no-face segments get the full band. Cards must not cover the face; this replaces eyeballing contact sheets.
-A landscape canvas (cut list "canvas" 16:9, 1920×1080) — hermes-worker reel, 2026-11-06, where the 9:16 math reported faces
-at y 1636 of 1080 and no x at all: boxes are mapped onto 1920×1080, every segment is sampled each --every s (default 0.5,
+A landscape canvas (cut list "canvas" 16:9, 1920×1080; the 9:16 math would report faces below the frame and no x at
+all): boxes are mapped onto 1920×1080, every segment is sampled each --every s (default 0.5,
 handheld shots wander), faces smaller than 60 px (a video call on a laptop screen) are ignored, and each row also carries
 faceLeft / faceRight, freeLeft / freeRight (x ranges inside wideMargin) and `side` — the wider free side for cards
 ("left" / "right", "none" when neither is 420 px wide). reelgen: R.free_side(a, b). Bands use wideBandTop / wideBandBottom.
 """
 import argparse, json, math, os, subprocess, sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from common import N, need_vision, clip_id, load_json, load_offsets, proxy_file, src_dur
+from common import N, clip_id, load_json, load_offsets, proxy_file, src_dur
+import engines
 
 W, H = 1080, 1920
 
@@ -59,17 +61,12 @@ def proxy_size(path):
     try: w, h = (int(v) for v in r.stdout.strip().split(",")[:2]); return w, h
     except ValueError: return W, H
 
-def detect(img_path):
-    need_vision("face_zones.py")
-    import Vision, Quartz
-    from Foundation import NSURL
-    src = Quartz.CGImageSourceCreateWithURL(NSURL.fileURLWithPath_(img_path), None); img = Quartz.CGImageSourceCreateImageAtIndex(src, 0, None)
-    req = Vision.VNDetectFaceRectanglesRequest.alloc().init()
-    Vision.VNImageRequestHandler.alloc().initWithCGImage_options_(img, None).performRequests_error_([req], None)
-    out = []
-    for r in (req.results() or []):
-        b = r.boundingBox(); out.append({"x": b.origin.x, "y": 1 - b.origin.y - b.size.height, "w": b.size.width, "h": b.size.height})   # 0–1 of the frame
-    return out
+ENGINE = []   # the faces engine once chosen (seams.py / actiongen.py call detect() without parsing flags)
+
+def detect(img_path, engine=None):
+    """Face boxes 0–1 of the frame, top-left origin ({"x","y","w","h","c"}), from the chosen faces engine."""
+    if engine or not ENGINE: ENGINE[:] = [engines.require("faces", "face_zones.py", engine)]
+    return engines.faces(img_path, ENGINE[0])
 
 def wide_zone(faces):
     """16:9 canvas: the head box (face ±, hair) over all samples and the free strips left / right of it and above / below it."""
@@ -90,12 +87,14 @@ def main():
     ap = argparse.ArgumentParser(); ap.add_argument("--cutlist", default="work/cutlist.json"); ap.add_argument("--public", default="reel/public"); ap.add_argument("--out", default="work/face_zones.json")
     ap.add_argument("--zoom", default=None, help="default: timeline_zoom.json next to the cut list")
     ap.add_argument("--every", type=float, default=None, help="sample every N source seconds (default: 20/50/80 %% of a segment on 9:16, every 0.5 s on 16:9)")
+    ap.add_argument("--engine", choices=engines.ENGINES["faces"], help="faces engine (default: engines.py choice — vision on macOS, yunet elsewhere)")
     a = ap.parse_args()
     global W, H
     cl = json.load(open(a.cutlist)); OFFSETS = load_offsets(a.cutlist)
     cv = cl.get("canvas") or {}; W, H = int(cv.get("w", 1080)), int(cv.get("h", 1920)); wide = W > H
     every = a.every if a.every is not None else (0.5 if wide else 0)
     if cl.get("silent"): json.dump([], open(a.out, "w")); print("silent cut list: no faces"); print("FACE_ZONES_DONE", a.out); return
+    ENGINE[:] = [engines.require("faces", "face_zones.py", a.engine)]
     zoom = load_json(a.zoom or os.path.join(os.path.dirname(a.cutlist) or ".", "timeline_zoom.json"), {})
     if not zoom: print("WARNING: no timeline_zoom.json (run gen_timeline.py first) — boxes are unzoomed")
     os.makedirs("work/faces", exist_ok=True); rows = []

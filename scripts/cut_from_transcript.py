@@ -18,7 +18,7 @@ Plan-level keys (all optional):
                   an event vlog breathes better with 0.2 / 0.45)
   "snap"          true (default): a word-snapped range that starts or ends inside a sentence grows to the sentence edge — a
                   word ending in .?!… or a pause ≥ snapJoin s, at most snapBack s back / snapFwd s forward, never into another
-                  range of the same clip (Halloween vlog v2: «фразы обрезанные посередине»). Every growth is printed.
+                  range of the same clip (a phrase cut mid-sentence reads as a mistake). Every growth is printed.
   "splitPauses"   seconds (default off): a word-snapped range is split at pauses longer than this, the pause shrinking to
                   lead + tail — whole scenes keep their laughs and reactions, dead air goes. A piece of one lone word between
                   two long pauses is dropped («Я.» reads as a glitch).
@@ -46,7 +46,7 @@ from common import N, canvas_size, clip_id, speech_run
 
 
 def capped(w):
-    """A recognizer can stretch a sentence's last word over the following silence (Parakeet once gave c0080 «жопа» 22 s) — cap it."""
+    """A recognizer can stretch a sentence's last word over the following silence (a recognizer can stretch one word over 22 s) — cap it."""
     return {**w, "end": min(w["end"], w["start"] + max(0.7, 0.11 * len(w["word"].strip())))}
 
 

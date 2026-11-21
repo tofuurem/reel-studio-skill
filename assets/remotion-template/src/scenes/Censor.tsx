@@ -10,8 +10,8 @@ export type CensorTrack = { fps: number; ell: number[][][] };
 const NONE = "linear-gradient(transparent, transparent)";
 
 /**
- * A censored cut (Halloween vlog, 2026-11-09): the same footage again over the timeline, blurred, visible only inside soft
- * ellipses that follow a joint, a pipe or a cannabis-leaf sign (censor_track.py → work/censor/*.json →
+ * A censored cut: the same footage again over the timeline, blurred, visible only inside soft
+ * ellipses that follow an object in hand, a logo or a sign (censor_track.py → work/censor/*.json →
  * reelgen.censor_blurs()). It repeats the Clip's own framing — the punch zoom with its slow drift around the eye line
  * (`at` = frames into the clip where this patch starts, `hold` = the clip's length) — and the mask sits INSIDE that
  * transform, so the ellipses stay on the source pixels they were tracked on. The video stays mounted while no ellipse is

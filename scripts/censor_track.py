@@ -1,39 +1,50 @@
-"""Where to blur in a censored cut (a joint, a pipe, a cannabis-leaf sign, a logo) → work/censor/<job>.json: per-frame
+"""Where to blur in a censored cut (an object in hand, a logo, a sign, a gesture) → work/censor/<job>.json: per-frame
 ellipses (0–1 of the frame, top-left origin) that reelgen.censor_blurs() turns into BlurPatch layers (scenes/Censor.tsx).
 
-Usage: work/venv/bin/python -I censor_track.py <project> [job names…]      (jobs: work/censor_jobs.json; none = all)
+Usage: work/venv/bin/python -I censor_track.py <project> [job names…] [--engine vision|mediapipe|none] [--faces-engine vision|yunet]
+       (jobs: work/censor_jobs.json; none = all; --engine = the hands engine, engines.py)
 → work/censor/<job>.json + work/stills/censor/track_<job>.jpg (24 frames with the ellipses drawn — look at every sheet:
-  a joint the tracker missed is the one thing that must not ship). Prints CENSOR_TRACK_DONE.
-Why (Halloween vlog censored, 2026-11-09, for YouTube or family): blur only what has to go, so the scenes stay whole —
-the user wanted the full-length cut «просто более культурной», not a 5-minute one.
+  a target the tracker missed is the one thing that must not ship). Prints CENSOR_TRACK_DONE.
+Rule: blur only what has to go, so the scenes stay whole — a censored version keeps the full length.
        work/venv/bin/python -I censor_track.py <project> --grid <clip> <a> <b> [step]
 → work/stills/censor/grid_<clip>_<a>.jpg: source frames of that clip with a 10 % grid and source seconds, to read keys off.
 Job: {"name", "clip": "c0081", "src": [a, b] (source s), "mode": "follow" | "hands" | "sign" | "box", …}
- follow — THE DEFAULT for a joint (v5, 2026-11-09): keyframes [[t, cx, cy, r], …] (source s; centre 0–1 of the frame,
-         r = radius as a share of the frame HEIGHT) on the joint itself (+ the fingers or the lips holding it), read off a
-         --grid sheet; linear in between. With "snap": true (default) each frame moves the centre onto the nearest Vision
-         hand within 1.3 r of the key (a hand moves faster than keys are placed); no hand there → the key as is. A joint in
-         the lips or sticking up out of a fist then ends up outside the blur — there "snap": false and keys on the joint
-         (Halloween 2026-11-13: six misses with snap). Only what
-         the keys mark is blurred — never a hand that holds a mic. Only the inner 60 % of r is blurred fully (the yellow
-         ring on the sheet): make r ≈ 1.5× the half-length of the joint + fingers (Halloween v5: r 0.18 for a close-up).
- hands — (v4; avoid: it blurred every hand near a face — on the beach the hands holding a mic, Halloween v4 censored
-         review «слишком много срабатываний, где нету никаких сигарет») Apple Vision faces + hand poses on the 1080 proxy at FPS: the biggest face ("faces": n for more) taller than
-         minFace (default 0.12 of the frame) — the smoker — and the hands within reach (2.4 face heights) of it get an
-         ellipse (the hand + room for what it holds); a hand within 0.9 face heights of the mouth also blurs the mouth. A face whose hands vanish keeps its last
-         ellipses for hold s (a hand at the mouth is often not detected).
- sign  — bright neon cyan/green blobs (the LV cannabis-leaf sign) bigger than minArea inside the optional "region".
- box   — keyframes [[t, cx, cy, rx, ry], …] (source s; rx of the width, ry of the height), linearly interpolated.
-Every frame's set also takes its neighbours' ellipses (±1 frame) — a blur that blinks off for one frame shows the joint.
-Halloween: the hand pose found the joint at the mouth on the beach and in the bar; it missed a face half out of frame
-(a box job filled it) and the sign mode needed cyanFrac 0.03 for a sign seen through motion blur. Wall paintings of a leaf
-are box jobs. A job may add "mouthAlways": [[a, b], …] — the mouth blurred with no hand near it (a joint held in the lips).
-Apple Vision only (macOS); elsewhere use box jobs.
+ follow — THE DEFAULT for a small object in hand: keyframes [[t, cx, cy, r], …] (source s; centre 0–1 of the frame,
+         r = radius as a share of the frame HEIGHT) on the object itself (+ the fingers or the lips holding it), read off a
+         --grid sheet; linear in between. With "snap": true (default) each frame moves the centre onto the nearest detected
+         hand within 1.3 r of the key (a hand moves faster than keys are placed); no hand there → the key as is. An object
+         in the lips or sticking up out of a fist then ends up outside the blur — there "snap": false and keys on the
+         object. Only what the keys mark is blurred — never a hand that holds a mic. Only the inner 60 % of r is blurred
+         fully (the yellow ring on the sheet): make r ≈ 1.5× the half-length of the object + fingers (≈ 0.18 for a close-up).
+ hands — (avoid: it blurs every hand near a face, a hand holding a mic included) faces + hand poses (engines.py) on the
+         1080 proxy at FPS: the biggest face ("faces": n for more) taller than minFace (default 0.12 of the frame) and the
+         hands within reach (2.4 face heights) of it get an ellipse (the hand + room for what it holds); a hand within 0.9
+         face heights of the mouth also blurs the mouth. A face whose hands vanish keeps its last ellipses for hold s (a
+         hand at the mouth is often not detected).
+ sign  — bright neon cyan/green blobs bigger than minArea inside the optional "region" (cyanFrac 0.03 for a sign seen
+         through motion blur).
+ box   — keyframes [[t, cx, cy, rx, ry], …] (source s; rx of the width, ry of the height), linearly interpolated: a face
+         half out of frame, a painted logo on a wall, anything the detectors miss.
+Every frame's set also takes its neighbours' ellipses (±1 frame) — a blur that blinks off for one frame shows the target.
+A job may add "mouthAlways": [[a, b], …] — the mouth blurred with no hand near it (an object held in the lips).
+Faces and hands come from engines.py (Apple Vision on macOS; YuNet + MediaPipe elsewhere). The hands engine "none" (no
+MediaPipe wheel for the platform) leaves follow keys unsnapped and hands jobs empty: use follow with "snap": false or box jobs.
 """
+import sys as _sys
+if __name__ == "__main__" and ("-h" in _sys.argv[1:] or "--help" in _sys.argv[1:]): print(__doc__); _sys.exit(0)   # usage, no side effects
 import glob, json, os, subprocess, sys, tempfile
 import numpy as np
 from PIL import Image, ImageDraw
 from scipy import ndimage
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import engines
+
+def _flag(name):
+    """Pop `--name value` out of argv (the job names are the other arguments)."""
+    if name not in sys.argv: return None
+    i = sys.argv.index(name); v = sys.argv[i + 1] if i + 1 < len(sys.argv) else None; del sys.argv[i:i + 2]; return v
+HANDS_ENGINE, FACES_ENGINE = _flag("--engine"), _flag("--faces-engine")
+ENG = {}
 
 FPS = 15; W, H = 960, 540
 if len(sys.argv) < 2 or not os.path.isdir(sys.argv[1]): sys.exit(__doc__)
@@ -57,24 +68,13 @@ def frames(job, tmp):
     return sorted(glob.glob(os.path.join(tmp, "*.jpg")))
 
 
-def vision(path):
-    """faces [(x, y, w, h)] and hands [(x0, y0, x1, y1)], 0–1, top-left origin."""
-    import Vision, Quartz
-    from Foundation import NSURL
-    s = Quartz.CGImageSourceCreateWithURL(NSURL.fileURLWithPath_(path), None); img = Quartz.CGImageSourceCreateImageAtIndex(s, 0, None)
-    fr = Vision.VNDetectFaceRectanglesRequest.alloc().init()
-    hr = Vision.VNDetectHumanHandPoseRequest.alloc().init(); hr.setMaximumHandCount_(6)
-    Vision.VNImageRequestHandler.alloc().initWithCGImage_options_(img, None).performRequests_error_([fr, hr], None)
-    faces = []
-    for r in fr.results() or []:
-        b = r.boundingBox(); faces.append((b.origin.x, 1 - b.origin.y - b.size.height, b.size.width, b.size.height))
-    hands = []
-    for o in hr.results() or []:
-        pts, _ = o.recognizedPointsForJointsGroupName_error_(Vision.VNHumanHandPoseObservationJointsGroupNameAll, None)
-        xy = [(p.location().x, 1 - p.location().y) for p in (pts or {}).values() if p.confidence() > 0.3]
-        if len(xy) >= 4:
-            xs, ys = zip(*xy); hands.append((min(xs), min(ys), max(xs), max(ys)))
-    return faces, hands
+def detect(path, faces=True):
+    """faces [(x, y, w, h)] and hands [(x0, y0, x1, y1)], 0–1, top-left origin (engines.py; one Vision pass when both are Vision)."""
+    if not ENG: ENG.update(hands=engines.require("hands", "censor_track.py", HANDS_ENGINE), faces=engines.require("faces", "censor_track.py", FACES_ENGINE))
+    if ENG["faces"] == ENG["hands"] == "vision":
+        d = engines.vision_detect(path, faces=True, hands=True, max_hands=6); fs, hs = d["faces"], d["hands"]
+    else: fs, hs = (engines.faces(path, ENG["faces"]) if faces else []), engines.hands(path, ENG["hands"], max_hands=6)
+    return [(f["x"], f["y"], f["w"], f["h"]) for f in fs], hs
 
 
 def circle(cx, cy, r_px):
@@ -85,8 +85,8 @@ def hands_mode(job, paths):
     min_face = job.get("minFace", 0.12); reach = job.get("reach", 2.4); hold = int(job.get("hold", 0.8) * FPS)
     out, last = [], {}
     for k, p in enumerate(paths):
-        faces, hands = vision(p); ell = []
-        for fi, (fx, fy, fw, fh) in enumerate(sorted(faces, key=lambda f: -f[3])[:job.get("faces", 1)]):   # the smoker = the biggest face
+        faces, hands = detect(p); ell = []
+        for fi, (fx, fy, fw, fh) in enumerate(sorted(faces, key=lambda f: -f[3])[:job.get("faces", 1)]):   # the person in focus = the biggest face
             if fh < min_face: continue
             fcx, fcy = fx + fw / 2, fy + fh / 2; fh_px = fh * H; mine = []
             mouth = (fcx, fy + 0.8 * fh)
@@ -95,10 +95,10 @@ def hands_mode(job, paths):
                 if np.hypot((hcx - fcx) * W, (hcy - fcy) * H) > reach * fh_px: continue
                 size = max((x1 - x0) * W, (y1 - y0) * H)
                 mine.append(circle(hcx, hcy, 0.6 * size + 0.2 * fh_px))
-                if np.hypot((hcx - mouth[0]) * W, (hcy - mouth[1]) * H) < 0.9 * fh_px:   # the hand at the mouth: the joint is there too
+                if np.hypot((hcx - mouth[0]) * W, (hcy - mouth[1]) * H) < 0.9 * fh_px:   # the hand at the mouth: the object is there too
                     mine.append(circle(mouth[0], mouth[1], 0.42 * fh_px))
             t = job["src"][0] + k / FPS
-            if any(a <= t <= b for a, b in job.get("mouthAlways", [])):   # a joint in the mouth with no hand near it
+            if any(a <= t <= b for a, b in job.get("mouthAlways", [])):   # an object in the mouth with no hand near it
                 mine.append(circle(mouth[0], mouth[1], 0.42 * fh_px))
             key = round(fcx, 1)   # the same face across frames, roughly by position
             if mine: last[key] = (k, mine)
@@ -138,7 +138,7 @@ def follow_mode(job, paths):
             v = [kf[i][j] + u * (kf[i + 1][j] - kf[i][j]) for j in range(1, 4)]
         cx, cy, r = v
         if snap:
-            _, hands = vision(p)
+            _, hands = detect(p, faces=False)
             best = None
             for (x0, y0, x1, y1) in hands:
                 hx, hy = (x0 + x1) / 2, (y0 + y1) / 2; d = np.hypot((hx - cx) * W, (hy - cy) * H) / H

@@ -3,9 +3,10 @@
 # Usage: qa_sheet.sh <project-dir> <name> <frame> [frame…]   → <project>/work/stills/<name>_<page>.jpg  (comp id: Reel)
 # make_proxies.py now encodes into work/tmp and moves finished files in, so QA can run while proxies are being made (older
 # versions wrote .tmp.mp4 into public/ and the bundler died on a vanishing file).
+[[ "${1:-}" == "-h" || "${1:-}" == "--help" ]] && { awk 'NR>1 && /^#/ {sub(/^# ?/, ""); print; next} NR>1 {exit}' "$0"; exit 0; }
 set -e -o pipefail
 P=$(cd "$1" && pwd); NAME=$2; shift 2
-# «2K only» intake: there are no 1080 proxies — render the stills from footage2k (reel-studio reel, 2026-11-05: 404 on footage/)
+# «2K only» intake: there are no 1080 proxies — render the stills from footage2k (footage/ would 404)
 p1080=("$P"/reel/public/footage/*.mp4(N)); if [ -z "${REMOTION_FOOTAGE_DIR:-}" ] && (( ${#p1080} == 0 )); then export REMOTION_FOOTAGE_DIR=footage2k; fi
 cd "$P/reel" && node scripts/stills.mjs Reel "$@" | tail -1
 cd "$P/work/stills"; page=0; args=(); n=0

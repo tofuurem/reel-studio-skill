@@ -29,3 +29,5 @@ the choice. `$S/codex_image.sh -o <dir> -n <name> [-r ref.png] [-c count] [-t] "
   a shade at the bottom for the word) and render with `cover.sh`.
 - The same plate can close the reel (`Plate` in `scenes/Board.tsx`: full-bleed image with a slow push-in;
   `R.write(..., end_card=False)` when the plate is the ending) so the cover and the last frame match.
+- The same look inside the montage is the «comic» style (`styles.md`, `scenes/ComicPanel.tsx`): panels with balloons
+  and boxes, plates made the same way.

@@ -3,7 +3,7 @@ import { ArtCover, Badge, CoverFrame, Cut, FloorShadow } from "./Cover";
 import { colors } from "./theme";
 import { Mark } from "./ui/Mark";
 
-/* EXAMPLE: lofiroom devlog covers — copy to reel/src/Covers.tsx and register each as a <Still> (commented block in Root.tsx).
+/* EXAMPLE: devlog series covers — copy to reel/src/Covers.tsx and register each as a <Still> (commented block in Root.tsx).
    Render: scripts/cover.sh <project> <covers>/public <abs out prefix> Cover1 Cover2 … (a check sheet with both crops comes out too).
    The background pair is per episode on purpose (one colour per episode, the grid reads as a set); everything else is tokens. */
 type P = { guides?: boolean };

@@ -173,17 +173,19 @@ export const ArtCover: React.FC<{
   wordSide?: Side;
   brand?: string;
   brandSide?: Side;
+  /** top of the brand plate (default 300; put it in the empty part of the plate, e.g. on the road at the bottom) */
+  brandTop?: number;
   plate?: string;
   plateInk?: string;
   /** colour of the shade (the darkest tone of the plate) and its strength at the bottom edge */
   shadeColor?: string;
   shade?: number;
   guides?: boolean;
-}> = ({ src, word, wordSize = 150, wordTop, wordSide = "left", brand = BRAND.series, brandSide = "left", plate = colors.accent, plateInk, shadeColor = "14,12,11", shade = 0.55, guides = false }) => (
+}> = ({ src, word, wordSize = 150, wordTop, wordSide = "left", brand = BRAND.series, brandSide = "left", brandTop = 300, plate = colors.accent, plateInk, shadeColor = "14,12,11", shade = 0.55, guides = false }) => (
   <AbsoluteFill style={{ background: `rgb(${shadeColor})`, overflow: "hidden" }}>
     <Img src={staticFile(src)} style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }} />
     <AbsoluteFill style={{ background: `linear-gradient(180deg, rgba(${shadeColor},0.35) 0%, rgba(${shadeColor},0) 22%, rgba(${shadeColor},0) 62%, rgba(${shadeColor},${shade}) 100%)` }} />
-    {brand ? (<div style={{ position: "absolute", top: 300, [brandSide]: 64, fontFamily: display, fontWeight: 900, fontSize: 82, lineHeight: 1, letterSpacing: -3, color: colors.bg, background: colors.ink, padding: "18px 28px 24px", borderRadius: 26, rotate: brandSide === "left" ? "-3deg" : "3deg", boxShadow: shadows.cover }}>
+    {brand ? (<div style={{ position: "absolute", top: brandTop, [brandSide]: 64, fontFamily: display, fontWeight: 900, fontSize: 82, lineHeight: 1, letterSpacing: -3, color: colors.bg, background: colors.ink, padding: "18px 28px 24px", borderRadius: 26, rotate: brandSide === "left" ? "-3deg" : "3deg", boxShadow: shadows.cover }}>
       {brand}
     </div>) : null}
     <div style={{ position: "absolute", top: wordTop ?? Math.round(1920 - N.coverCrop11Top - 20 - wordSize * 1.34), [wordSide]: 56, fontFamily: display, fontWeight: 900, fontSize: wordSize, lineHeight: 0.95, letterSpacing: -4, color: plateInk ?? inkOn(plate), background: plate, padding: `${Math.round(wordSize * 0.18)}px ${Math.round(wordSize * 0.24)}px ${Math.round(wordSize * 0.21)}px`, borderRadius: Math.round(wordSize * 0.2), rotate: "-3deg", whiteSpace: "nowrap", boxShadow: shadows.cover }}>

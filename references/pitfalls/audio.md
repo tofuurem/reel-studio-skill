@@ -5,7 +5,7 @@ Traps around the voice, loudness, bed and bleeps. The chain, its never-rules and
 - **Ad-hoc loudness fix** → measure integrated LUFS, then a static `volume=XdB` + `alimiter=…:level=false`. Never single-pass `loudnorm` (pumps the bed in every pause); `alimiter`'s default `level=true` lifts the output ≈ 1.5 dB.
 - **`render.sh` loudness** → read its `measured I=… → final …` line; `LOUDNESS OFF TARGET` fails the render.
 - **`make_proxies` prints `NOTE: no isolated voice for …`** → those proxies carry camera sound: run `voice_isolate.sh` on them and re-run.
-- **Music**: nothing licensed on the machine (no Apple Loops; CapCut cache tracks are CapCut-only). Offer the user's own track first; the procedural `make_bed.sh` bed is recognisable across videos — a different preset each time. Bed level → `craft/audio.md`.
+- **Music**: nothing licensed on the machine (no Apple Loops; CapCut cache tracks are CapCut-only). Offer the user's own track first, else a real openly licensed one found for this video (`sfx_find.py --music`, varied: several queries, random pages, used tracks skipped); the procedural `make_bed.sh` bed is recognisable across videos — only on request. Bed level → `craft/audio.md`.
 - **ffmpeg `sine` peaks at ≈ −21 dBFS**, not 0 → in ad-hoc beeps, set the gain by measured peak. `bleep.py --gain` is the true peak; check `astats` Peak inside a bleep window after any change.
 - **The same whoosh on every cut** → sound marks events only: `craft/transitions.md` §0.
 - **Bleeps** → after every cut read the bleep list against the transcript. A missed or wrongly caught word → extend `swear.py` (owner: `craft/captions.md`).

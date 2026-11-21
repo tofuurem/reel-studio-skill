@@ -18,6 +18,8 @@ Numbers: `numbers.md` «Seams». How a scene moves inside itself: `motion-design
 - **Never**: a whoosh, whip or flash on every action; two effect seams back to back; a trick repeated as a pattern; an
   effect to "make it dynamic" — fake energy reads as cheap. Nothing bright: no white-out, no full-frame colour flash
   (flashes stay ≤ 0.45, the leak ≤ `seamLeakPeak`).
+- A full-frame comic panel (`styles.md` «comic», `ComicPanel full`) enters on a hard page-cut and counts as an effect
+  seam; an inset panel does not.
 - When unsure, plain. A reel with three well-placed seams beats one with twelve.
 
 ## 1. Calm seams — the cut list's `"transition"` (plan.json opts of the incoming range)
@@ -39,7 +41,7 @@ Numbers: `numbers.md` «Seams». How a scene moves inside itself: `motion-design
   a capped opacity plus a lighter, flatter picture — Remotion's `lightLeak` preset fills the frame with solid yellow at its
   peak and is not used.
 - `match` and `bodywipe` are measured from the picture: `gen_timeline.py` → `work/venv/bin/python -I $S/seams.py <project>`
-  → `SEAMS_DONE` (Apple Vision: faces at the cut for `match`, the crossing person's trailing edge for `bodywipe`) →
+  → `SEAMS_DONE` (engines.py: faces at the cut for `match`, the crossing person's trailing edge for `bodywipe`) →
   `gen_timeline.py` again. A match that needs more than `seamMatchMaxScale` zoom, or a crossing that is not one, falls
   back to a dissolve / plain wipe with a WARNING — pick another frame. For `bodywipe` put the cut on the frame the person
   ENTERS the shot; the outgoing clip keeps playing over the cut while they cross.

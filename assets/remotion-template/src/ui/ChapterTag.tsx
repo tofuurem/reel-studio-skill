@@ -5,8 +5,8 @@ import { N } from "../numbers";
 import { colors, safe, shadows } from "../theme";
 import { inAt, outBefore } from "./anim";
 
-/** "01 · Фотоархив" pill at the top-left (y N.tagY). Slides in flat — no tilt, no emoji (birthday reel: tilted pills and
- *  emoji read as clip-art). Usually placed by <Chapter>, which adds the flash and the whoosh. */
+/** "01 · Фотоархив" pill at the top-left (y N.tagY). Slides in flat — no tilt, no emoji (tilted pills and emoji read as
+ *  clip-art). Usually placed by <Chapter>, which adds the flash and the whoosh. */
 export const ChapterTag: React.FC<{ n: string; title: string }> = ({ n, title }) => {
   const frame = useCurrentFrame();
   const { durationInFrames } = useVideoConfig();

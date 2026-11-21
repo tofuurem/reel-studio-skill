@@ -4,8 +4,8 @@
 Usage: python3 -I hdr_lut.py [--out ~/.cache/reel-studio/luts] [--size 65]     → HLG_BT2020_to_Rec709.cube, PQ_BT2020_to_Rec709.cube
        (common.hdr_lut() writes them on first use; make_proxies / inventory / night_lift pick them for HDR sources)
 
-Why: Chrome and the proxies are SDR Rec.709. An HLG clip tagged bt709 without conversion looks grey, flat and pale (the
-2026-11-08 check on iPhone 13 clips) — the transfer curve and the wide BT.2020 primaries are read as Rec.709.
+Why: Chrome and the proxies are SDR Rec.709. An HLG clip tagged bt709 without conversion looks grey, flat and pale (checked
+on iPhone HLG clips) — the transfer curve and the wide BT.2020 primaries are read as Rec.709.
 
 The chain per RGB triplet (input is the source's non-linear R'G'B', full range, decoded with the BT.2020 matrix):
   HLG: inverse OETF → scene light → OOTF (Lw 1000 nits, γ 1.2) → display light in nits     (ITU-R BT.2100)
@@ -13,8 +13,8 @@ The chain per RGB triplet (input is the source's non-linear R'G'B', full range, 
   → BT.2020 → BT.709 primaries (linear) → HDR reference white (203 nits, BT.2408) scaled by `white` → saturation `sat`
   → an exponential roll-off of the luminance from `knee` up (hue kept: RGB scaled by the luminance ratio) → out-of-gamut
   colours pulled to their luminance → BT.1886 inverse (γ `gamma`).
-The defaults were fitted (2026-11-08) to Apple's own conversion (VideoToolbox `scale_vt`, what Photos / QuickTime show) on
-four iPhone 13 HLG clips — day, night, indoor: the fitted knee is so low that the roll-off is one soft curve over the whole
+The defaults were fitted to Apple's own conversion (VideoToolbox `scale_vt`, what Photos / QuickTime show) on
+four iPhone HLG clips — day, night, indoor: the fitted knee is so low that the roll-off is one soft curve over the whole
 range. On two clips left out of the fit the mean error is 4 code values of 255 (95 % of pixels within 10) — the same picture.
 ffmpeg's auto-inserted conversions pick the right matrices (BT.2020 in, BT.709 out) when the output is tagged bt709;
 the proxies are, so the LUT simply follows the scale like the D-Log one. PQ uses the same curve after its EOTF (untested on

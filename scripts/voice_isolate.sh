@@ -6,6 +6,7 @@
 # (never digital silence), or nothing in a quiet room. --atten-lim-db N forces the limit (0 = no DeepFilterNet). --lav takes
 # the DJI transmitter's own 32-bit float recordings (found and synced by cross-correlation). Do NOT substitute ffmpeg
 # afftdn/agate/anlmdn (rejected by ear). Two lav mics on the camera's L/R channels: dualmic.py instead.
+[[ "${1:-}" == "-h" || "${1:-}" == "--help" ]] && { awk 'NR>1 && /^#/ {sub(/^# ?/, ""); print; next} NR>1 {exit}' "$0"; exit 0; }
 set -e -o pipefail
 P=${1:?project}; shift; SK=$(cd "$(dirname "$0")" && pwd); ARGS=()
 while [ "${1#--}" != "$1" ]; do

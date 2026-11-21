@@ -1,6 +1,7 @@
 #!/bin/zsh
 # Render frames of a composition into one contact sheet (half-size stills, 200 px grid lines).
 # Usage: contact_sheet.sh <project-dir> <CompId> <out.jpg> <frame> [frame…]      (qa_sheet.sh pages many frames)
+[[ "${1:-}" == "-h" || "${1:-}" == "--help" ]] && { awk 'NR>1 && /^#/ {sub(/^# ?/, ""); print; next} NR>1 {exit}' "$0"; exit 0; }
 set -e -o pipefail   # 10–60 s per sheet (bundle copies public/ + Chrome start); batch all frames into one call
 P=$(cd "${1:?project}" && pwd); COMP=$2; OUT=$3; shift 3
 case "$OUT" in /*) ;; *) OUT="$PWD/$OUT";; esac

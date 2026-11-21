@@ -1,4 +1,4 @@
-"""EXAMPLE · voiceover only (lofiroom ep3 pattern): no talking head — the voice takes sit on dark carriers and the picture is
+"""EXAMPLE · voiceover only (devlog pattern): no talking head — the voice takes sit on dark carriers and the picture is
 boards end to end (crossfading into each other), a receipt that lands on the spoken numbers, tiles, a chat and a closing plate.
 Copy to work/gen_reel.py, rewrite anchors, run after every re-cut:  python3 -I work/gen_reel.py && (cd reel && npx tsc --noEmit -p .)"""
 import os, sys

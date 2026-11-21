@@ -2,6 +2,7 @@
 """Measure a reference reel («сделай как тут») — rhythm, framing, on-screen text, loudness — so its STYLE can be matched.
 
 Usage: work/venv/bin/python -I ref_analyze.py <project> <video> [--name NAME] [--ocr-every 0.5] [--no-ocr]
+           [--engine vision|yunet] [--ocr-engine vision|rapidocr]
 → work/refs/<name>/ref.json, ref.md (numbers + how they map onto this skill's knobs), sheet.jpg (one frame per shot,
   numbered in order, 6 per row). Prints REF_DONE <ref.md>.
 
@@ -10,9 +11,9 @@ What it measures
             jump in the 8-frame difference for dissolves; jump cuts inside one take (the speaker shifts) count — they are
             the rhythm of a talking-head reel. Long cross-fades and whip-pans may be missed or doubled: check the sheet.
   rhythm    shot count, median / mean / shortest / longest shot, cuts per 10 s, the hook (cuts in the first 3 s, first cut).
-  framing   per shot (middle frame, Apple Vision faces): the largest face's height in the frame → close-up / medium close-up
+  framing   per shot (middle frame, faces — engines.py: Apple Vision on macOS, YuNet elsewhere): the largest face's height in the frame → close-up / medium close-up
             / medium / wide / no face (screens, b-roll), as a share of the running time.
-  text      Apple Vision OCR (ru + en) every --ocr-every s: share of time with text, where it sits (top / middle / bottom), the
+  text      OCR (ru + en; Apple Vision on macOS, RapidOCR elsewhere) every --ocr-every s: share of time with text, where it sits (top / middle / bottom), the
             caption rail (the band where the text changes most often): its y and letter height on a 1080×1920 canvas, words
             and lines per page, page length, ALL CAPS share.
   sound     integrated loudness and loudness range (EBU R128).
@@ -22,6 +23,7 @@ import argparse, difflib, glob, json, os, re, subprocess, sys
 import numpy as np
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from common import N, ascii_stem, atomic_json, probe
+import engines
 
 FW = 72   # analysis width for cut detection (px)
 
@@ -62,26 +64,18 @@ def grab(path, t, out, w=360):
     return os.path.exists(out)
 
 
-def vision(img_path, faces=True, text=False):
-    import Vision, Quartz
-    from Foundation import NSURL
-    src = Quartz.CGImageSourceCreateWithURL(NSURL.fileURLWithPath_(img_path), None)
-    if src is None: return [], []
-    img = Quartz.CGImageSourceCreateImageAtIndex(src, 0, None); reqs = []
-    if faces: fr = Vision.VNDetectFaceRectanglesRequest.alloc().init(); reqs.append(fr)
+ENG = {}   # {"faces": engine, "ocr": engine} — set in main()
+
+
+def detect(img_path, faces=True, text=False):
+    """Face heights and text lines ({text, cy, h, x, w}, 0–1 of the frame) of one image (engines.py)."""
+    fs, ts = [], []
+    if not os.path.exists(img_path): return fs, ts
+    if faces: fs = [f["h"] for f in engines.faces(img_path, ENG["faces"])]
     if text:
-        tr = Vision.VNRecognizeTextRequest.alloc().init(); tr.setRecognitionLevel_(0); tr.setUsesLanguageCorrection_(False)
-        tr.setRecognitionLanguages_(["ru-RU", "en-US"]); reqs.append(tr)
-    Vision.VNImageRequestHandler.alloc().initWithCGImage_options_(img, None).performRequests_error_(reqs, None)
-    fs = [r.boundingBox().size.height for r in (fr.results() or [])] if faces else []
-    ts = []
-    if text:
-        for r in (tr.results() or []):
-            c = r.topCandidates_(1)
-            if not c or c[0].confidence() < 0.4: continue
-            b = r.boundingBox(); s = str(c[0].string()).strip()
-            if len(re.sub(r"\W", "", s)) < 2: continue
-            ts.append({"text": s, "cy": 1 - (b.origin.y + b.size.height / 2), "h": b.size.height, "x": b.origin.x, "w": b.size.width})
+        for t in engines.ocr(img_path, ("ru", "en"), ENG["ocr"], min_conf=0.4):
+            if len(re.sub(r"\W", "", t["text"])) < 2: continue
+            ts.append({"text": t["text"], "cy": t["y"] + t["h"] / 2, "h": t["h"], "x": t["x"], "w": t["w"]})
     return fs, ts
 
 
@@ -173,9 +167,15 @@ def advice(r):
 def main():
     ap = argparse.ArgumentParser(); ap.add_argument("project"); ap.add_argument("video"); ap.add_argument("--name")
     ap.add_argument("--ocr-every", type=float, default=0.5); ap.add_argument("--no-ocr", action="store_true")
+    ap.add_argument("--engine", choices=engines.ENGINES["faces"], help="faces engine (default: engines.py choice)")
+    ap.add_argument("--ocr-engine", choices=engines.ENGINES["ocr"], help="OCR engine (default: engines.py choice)")
     a = ap.parse_args()
     if not os.path.exists(a.video): sys.exit(f"no such file: {a.video}")
-    mac = sys.platform == "darwin"
+    ENG.update(faces=engines.choose("faces", a.engine), ocr=engines.choose("ocr", a.ocr_engine))
+    can = {}
+    for cap in ("faces", "ocr"):   # an engine that cannot run here leaves its part out ("unknown" framing, no text stats)
+        miss = engines.missing(cap, ENG[cap]); can[cap] = not miss
+        if miss and not (cap == "ocr" and a.no_ocr): print(f"WARNING: {cap} engine {ENG[cap]} cannot run here ({miss}) — {engines.FIX.get(ENG[cap], '')}")
     info = probe(a.video); W, H, dur = info["w"], info["h"], info["dur"]
     if not (W and H and dur): sys.exit("not a video (no picture or no duration)")
     name = ascii_stem(a.name or os.path.splitext(os.path.basename(a.video))[0])[:60]
@@ -191,7 +191,7 @@ def main():
     framing, shot_rows = {}, []
     for i, (s, e) in enumerate(shots):
         img = os.path.join(out, f"_s{i:03d}.jpg"); grab(a.video, (s + e) / 2, img)
-        fh = max(vision(img)[0] or [0]) if mac and os.path.exists(img) else None
+        fh = max(detect(img)[0] or [0]) if can["faces"] and os.path.exists(img) else None
         size = shot_size(fh) if fh is not None else "unknown"
         framing[size] = framing.get(size, 0) + (e - s)
         shot_rows.append({"n": i + 1, "start": round(s, 2), "len": round(e - s, 2), "faceH": round(fh, 3) if fh else None, "size": size})
@@ -203,11 +203,11 @@ def main():
                         "-vf", f"scale=180:-2,tile={cols}x{rows}:padding=4:color=0x222222", "-frames:v", "1", "-q:v", "3", os.path.join(out, "sheet.jpg")])
     # on-screen text
     text, start_text = {}, None
-    if mac and not a.no_ocr:
+    if can["ocr"] and not a.no_ocr:
         step = max(a.ocr_every, dur / 240)   # ≤ 240 OCR frames, decoded in ONE ffmpeg pass (a seek per frame took minutes)
         subprocess.run(["ffmpeg", "-v", "error", "-nostdin", "-y", "-i", a.video, "-an", "-vf", f"fps=1/{step},scale=720:-2", "-q:v", "3", os.path.join(out, "_o%04d.jpg")])
         ocr = sorted(glob.glob(os.path.join(out, "_o*.jpg")))
-        samples = [(round(i * step, 2), vision(f, faces=False, text=True)[1]) for i, f in enumerate(ocr)]
+        samples = [(round(i * step, 2), detect(f, faces=False, text=True)[1]) for i, f in enumerate(ocr)]
         text = text_stats(samples, step, W, H); start_text = any(ls for t, ls in samples if t < 1.0)
         for f in ocr: os.remove(f)
     lufs, lra = loudness(a.video) if info["has_audio"] else (None, None)

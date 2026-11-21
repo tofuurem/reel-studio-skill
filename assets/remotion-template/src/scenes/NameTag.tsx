@@ -10,7 +10,7 @@ const clamp = { extrapolateLeft: "clamp", extrapolateRight: "clamp" } as const;
 export type FaceTrack = { fps: number; box: number[][]; below?: boolean; place?: "above" | "below" | "left" | "right" };
 
 /**
- * «Кто это» (v5, 2026-11-09: the user wanted to know who is talking, at least the first time): a small name pill that
+ * «Кто это» (who is talking, at least the first time each person appears): a small name pill that
  * rides above the person's head — tracked by Apple Vision, smoothed — with a caret pointing at it. It sits inside the
  * Clip's own punch / drift (like BlurPatch) so it stays on the head, and is scaled back so its size does not breathe.
  * Pops in, holds, leaves faster; never over the face (above the hairline, or under the chin when the head is near the top).

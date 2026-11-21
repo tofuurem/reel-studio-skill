@@ -12,6 +12,7 @@ Traps in camera files, colour, file names, screen recordings and crops. This fil
 - **Long takes** → never proxy in full: `--trim-to-cutlist 2`; cutaways from unused parts via `--extra "<take>@<start>-<end>"`.
 - **DJI counters repeat across days** (`_0005_` on two dates) → never key by the number; `clipid.py` aborts on a collision: `ingest.py --camera link` names the second `…_0005b_D.MP4`.
 - **Non-ASCII names** (macOS «Запись экрана …», «Снимок экрана …») are NFD on external volumes; a pasted NFC path does not open → run `ingest.py` before any other script touches them (ASCII copies under `assets/`).
+- **An export or a download among the camera clips** → `ingest.py` files a video as camera only with camera evidence (a DJI metadata track, make / model tags, a camera-written name — `common.camera_evidence`); the rest goes to `assets/video` as b-roll. A clip of the user's own that lost its tags (sent through a messenger) is listed as video: pass its original path to the scripts instead.
 - **macOS screenshot / recording names contain U+00A0** (and U+202F before AM/PM) → regexes use `\s+`, not a literal space.
 - **ffmpeg here has no `drawtext`** → no labels on tiles; keep the table order equal to the tile order.
 - **Landscape screen recording as full-frame vertical** → pre-crop it (`crop=876:1558:<x>:0`) into `work/broll/` and pass that as `--extra`. macOS leaves Control Center and the cursor in the first ≈ 6 s: trim. Check any screen crop over time, not on one frame (a bubble appears later and gets cut; UI text at both edges needs `zoom 1.0`).

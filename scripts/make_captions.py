@@ -9,7 +9,7 @@ Rules (learned the hard way):
 - break on sentence punctuation, on a comma once ≥3 words, at --max-words / --max-sec / --max-chars, or on a >0.9 s pause
   (defaults from references/craft/numbers.json: 8 words, 3.4 s, 54 characters = two lines at 50 px; a third line climbs into the card band);
 - never leave a preposition/conjunction dangling at the end of a line, never strand the last word of a sentence alone;
-- brand names get their canonical spelling (brands.json: {"дот": "Dot", "гермес": "Hermes"});
+- brand names get their canonical spelling (brands.json: {"клод": "Claude", "капкат": "CapCut"});
 - tokens inside silent ranges of the cut list (muted segments, the silent carrier, after the speech end) are dropped: a recognizer
   may invent words there («Продолжение следует…»); voiceovers placed over a muted shot are kept;
 - swears (swear.py) become first letter + asterisks here — a re-run can no longer bring them back (--no-mask to keep them).

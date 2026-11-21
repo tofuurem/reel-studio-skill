@@ -1,41 +1,47 @@
 #!/usr/bin/env python3
-"""Where are the people in each shot? (macOS Vision) → the crop of every landscape camera segment, decided BEFORE the proxies.
+"""Where are the people in each shot? → the crop of every landscape camera segment, decided BEFORE the proxies.
 
 Usage: work/venv/bin/python -I people_zones.py [--cutlist work/cutlist.json] [--out work/people_zones.json] [--fps 4] [--sheet] [--force]
+           [--engine vision|rtdetr|yolo] [--faces-engine vision|yunet]
 
 A 16:9 camera clip cut to a 9:16 canvas keeps under a third of its width; a centre crop loses whoever stands at the edge
-(Halloween reel, 2026-11-04: the kick, «стоит фоткает», a girl in the shop — all half out of frame until placed by hand).
 For every main segment that needs a crop (common.needs_crop: a camera clip wider than a portrait canvas, no CapCut framing)
-this samples the SOURCE at --fps (default numbers.json peopleFps), runs VNDetectHumanRectanglesRequest + face rectangles,
+this samples the SOURCE at --fps (default numbers.json peopleFps), finds people (whole bodies) and faces — engines.py: Apple
+Vision on macOS, RT-DETR + YuNet elsewhere (--engine / --faces-engine, references/engines.md) —
 and picks the crop centre per frame: the biggest person plus every other big one (≥ peopleNearArea of its area) that still
 fits the crop; when the main person alone is wider than the crop, their face. The per-frame centres are smoothed
 (peopleSmoothSec), limited in speed (peoplePanSpeed of the frame width per second) and written as keyframes every
 peopleKeyEvery s — or ONE centre when the subject moves less than peoplePanMin (a still shot must not wobble).
 Overrides: a segment's "cropX" (plan.json opts → cut list): 0.3 = fixed centre, [0.6, 0.3] = pan from → to. Nobody found →
-the frame centre, listed as WARNING (set cropX for it). Costumes (a banana suit) are often not «people»; faces then decide.
+the frame centre, listed as WARNING (set cropX for it). Full-body costumes are often not «people»; faces then decide.
 Output work/people_zones.json {"segments": [{seg, clip, src, srcStart, srcEnd, srcW, srcH, mode auto|manual|centre, keys
 [[source s, centre 0–1]], found, frames}]}; make_proxies.py crops from it (and refuses to centre-crop without it).
-Detections are cached per clip in work/people/<clip>.json, so a re-cut only scans new seconds. --sheet writes
+Detections are cached per clip in work/people/<clip>.json (with the engines that made them: another engine rescans), so a
+re-cut only scans new seconds. --sheet writes
 work/people/sheet_NN.jpg: the frame of every segment (start and end too when it pans) with the crop drawn in red — look at it
 before the proxies are encoded.
 """
 import argparse, json, os, subprocess, sys, tempfile
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from common import HWACCEL, N, atomic_json, need_vision, clip_id, load_json, needs_crop, probe, src_dur
+from common import HWACCEL, N, atomic_json, clip_id, load_json, needs_crop, probe, src_dur
+import engines
+
+ENGINES = []   # [people engine, faces engine], chosen once (seams.py calls detect() without parsing flags)
 
 
-def vision(img_path):
-    """People (full body) and faces in one image: boxes 0–1 of the frame, top-left origin."""
-    need_vision("people_zones.py")
-    import Vision, Quartz
-    from Foundation import NSURL
-    s = Quartz.CGImageSourceCreateWithURL(NSURL.fileURLWithPath_(img_path), None); img = Quartz.CGImageSourceCreateImageAtIndex(s, 0, None)
-    body = Vision.VNDetectHumanRectanglesRequest.alloc().init(); body.setUpperBodyOnly_(False)
-    face = Vision.VNDetectFaceRectanglesRequest.alloc().init()
-    Vision.VNImageRequestHandler.alloc().initWithCGImage_options_(img, None).performRequests_error_([body, face], None)
-    box = lambda r: {"x": round(r.boundingBox().origin.x, 4), "y": round(1 - r.boundingBox().origin.y - r.boundingBox().size.height, 4),
-                     "w": round(r.boundingBox().size.width, 4), "h": round(r.boundingBox().size.height, 4), "c": round(float(r.confidence()), 2)}
-    return [box(r) for r in body.results() or [] if r.confidence() >= N["peopleMinConf"]], [box(r) for r in face.results() or []]
+def use_engines(people=None, faces=None, script="people_zones.py"):
+    ENGINES[:] = [engines.require("people", script, people), engines.require("faces", script, faces)]
+    return ENGINES
+
+
+def detect(img_path, faces=True):
+    """People (full body, c ≥ peopleMinConf) and faces in one image: boxes 0–1 of the frame, top-left origin."""
+    pe, fe = ENGINES or use_engines()
+    if pe == fe == "vision":   # one Vision pass for both
+        d = engines.vision_detect(img_path, people=True, faces=True); body, face = d["people"], d["faces"]
+    else: body, face = engines.people(img_path, pe), (engines.faces(img_path, fe) if faces else [])
+    box = lambda r: {"x": round(r["x"], 4), "y": round(r["y"], 4), "w": round(r["w"], 4), "h": round(r["h"], 4), "c": round(r["c"], 2)}
+    return [box(r) for r in body if r["c"] >= N["peopleMinConf"]], [box(r) for r in face]
 
 
 def scan(src, a, b, fps, cache):
@@ -49,7 +55,7 @@ def scan(src, a, b, fps, cache):
                         "-an", "-vf", f"fps={fps},scale=640:-2", "-q:v", "4", os.path.join(tmp, "%05d.jpg")], check=True)
         new = []
         for i, name in enumerate(sorted(n for n in os.listdir(tmp) if n.endswith(".jpg") and not n.startswith("."))):   # ._*.jpg on exFAT
-            people, faces = vision(os.path.join(tmp, name))
+            people, faces = detect(os.path.join(tmp, name))
             new.append({"t": round(t0 + (i + 0.5) / fps, 3), "people": people, "faces": faces})
     keep = [f for f in frames if not (new and new[0]["t"] - 0.01 <= f["t"] <= new[-1]["t"] + 0.01)]
     cache["frames"] = sorted(keep + new, key=lambda f: f["t"])
@@ -134,10 +140,12 @@ def sheet(rows, cl):
 
 
 def main():
-    ap = argparse.ArgumentParser(description="people-aware crop centres for landscape camera segments (Apple Vision)")
+    ap = argparse.ArgumentParser(description="people-aware crop centres for landscape camera segments (engines.py: people + faces)")
     ap.add_argument("--cutlist", default="work/cutlist.json"); ap.add_argument("--out", default="work/people_zones.json")
     ap.add_argument("--fps", type=float, default=N["peopleFps"]); ap.add_argument("--sheet", action="store_true", help="write work/people/sheet_NN.jpg with the crops drawn")
     ap.add_argument("--force", action="store_true", help="ignore the detection cache")
+    ap.add_argument("--engine", choices=engines.ENGINES["people"], help="people engine (default: engines.py choice — vision on macOS, rtdetr elsewhere)")
+    ap.add_argument("--faces-engine", choices=engines.ENGINES["faces"], help="faces engine (default: vision on macOS, yunet elsewhere)")
     a = ap.parse_args()
     cl = json.load(open(a.cutlist)); os.makedirs("work/people", exist_ok=True)
     cw, ch = cl["canvas"].get("w") or 1080, cl["canvas"].get("h") or 1920
@@ -157,8 +165,10 @@ def main():
             cp = f"work/people/{cid}.json"
             st = os.stat(src); sig = [os.path.realpath(src), st.st_size, int(st.st_mtime)]
             cache = caches.get(cid) or caches.setdefault(cid, {} if a.force else load_json(cp, {}) or {})
-            if cache.get("sig", sig) != sig: cache.clear()   # another file under the same id (a repeated DJI counter, a replaced source)
-            cache["sig"] = sig
+            if not ENGINES: use_engines(a.engine, a.faces_engine)
+            # another file under the same id (a repeated DJI counter, a replaced source) or other engines: scan again
+            if cache.get("sig", sig) != sig or cache.get("engines", ["vision", "vision"]) != ENGINES: cache.clear()
+            cache["sig"] = sig; cache["engines"] = list(ENGINES)
             frames = scan(src, a0, b0, a.fps, cache); atomic_json(cache, cp)
             keys, found = path(frames, a0, b0, span)
             row.update(frames=len(frames), found=found)

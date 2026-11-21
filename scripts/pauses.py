@@ -1,4 +1,6 @@
 """Print pauses (RMS below threshold) in a wav window. usage: pauses.py wav start dur [thr_db=-36] [min_s=0.25]"""
+import sys as _sys
+if __name__ == "__main__" and ("-h" in _sys.argv[1:] or "--help" in _sys.argv[1:]): print(__doc__); _sys.exit(0)   # usage, no side effects
 import subprocess, sys, struct, math
 wav, s, d = sys.argv[1], float(sys.argv[2]), float(sys.argv[3]); thr = float(sys.argv[4]) if len(sys.argv) > 4 else -36; mn = float(sys.argv[5]) if len(sys.argv) > 5 else 0.25
 raw = subprocess.run(["ffmpeg", "-v", "error", "-ss", str(s), "-t", str(d), "-i", wav, "-ac", "1", "-ar", "16000", "-f", "s16le", "-"], capture_output=True).stdout

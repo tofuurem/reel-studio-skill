@@ -3,7 +3,7 @@
 
 Usage: python -I audio_qa.py <file> [--project <dir>] [--json out.json]     (render.sh runs it on every final file)
 Checks (numbers.json «Voice chain» / «Audio levels»):
-  loudness     integrated LUFS vs targetLufs, loudness range in [lraMin, lraMax] (2.6 LU = over-compressed, the 2026-11-05 reel),
+  loudness     integrated LUFS vs targetLufs, loudness range in [lraMin, lraMax] (2.6 LU = over-compressed),
                true peak ≤ truePeakDb + 0.5 (AAC adds a little), sample overs
   silence      digital silence (frames under −80 dBFS) inside the speech span — a gated denoiser or a hole in the edit
   floor        the pause floor under the speech level (dB): < 35 dB apart = audible room/hiss

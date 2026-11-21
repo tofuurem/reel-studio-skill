@@ -1,4 +1,4 @@
-"""EXAMPLE · camera + voiceover takes (lofiroom ep2 pattern): close-ups shrink into a left window with notes on the right
+"""EXAMPLE · camera + voiceover takes (devlog pattern): close-ups shrink into a left window with notes on the right
 (SplitStage + SideList / SideBubble); every voiceover segment (dark carrier) is covered by a Board.
 Copy to work/gen_reel.py, rewrite anchors, run after every re-cut:  python3 -I work/gen_reel.py && (cd reel && npx tsc --noEmit -p .)"""
 import os, sys

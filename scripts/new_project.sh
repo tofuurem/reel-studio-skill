@@ -1,21 +1,31 @@
 #!/bin/zsh
 # Create a project folder for one video or for a series of episodes made from one pool of material.
-# Usage: new_project.sh <name|path> [episodes]   e.g. new_project.sh video_lofiroom 3
+# Usage: new_project.sh <name|path> [episodes]   e.g. new_project.sh video_devlog 3
 #   normally a full path the user confirmed (projects_dir.py suggests it); a bare name resolves the same way projects_dir.py
-#   suggests: a remembered folder, else the cwd (the cwd itself when it is empty)
+#   suggests: <drive>/Video Production/<YYYY-MM name> on a library drive, else a remembered folder, else the cwd (the cwd
+#   itself when it is empty)
+# Library drive (the video-library skill's drives: Source Video/_catalog.csv + Video Production/ in the drive root): never inside
+#   Source Video/ — it holds raw clips only; the project uses them by path from <drive>/Video Production/.
 # One video:  <path>/{assets/{screens,screenrec,voiceover,music,models,video},work/broll,out}
 # Series:     the same shared assets/ and work/ (inventory, transcripts of the whole pool, PLAN.md, NOTES.md) plus
 #             <path>/epN/{work,out} with links into the pool:  epN/assets → ../assets,
 #             epN/work/{voice,new,vo,pk,broll} → ../../work/{voice,new,vo,pk,broll}
 #             — voice isolation, transcripts and carriers are made once for the pool; without the links an episode's
-#             make_proxies silently fell back to the camera sound (audit 2026-10-22).
+#             make_proxies silently falls back to the camera sound.
 #             Each episode is then a normal project (scaffold.sh <path>/epN; its cutlist.json, proxies, reel/ are its own).
 # Never reuses an existing folder's files: existing dirs and links are kept, nothing is overwritten.
+[[ "${1:-}" == "-h" || "${1:-}" == "--help" ]] && { awk 'NR>1 && /^#/ {sub(/^# ?/, ""); print; next} NR>1 {exit}' "$0"; exit 0; }
 set -e
 P=${1:?name or path}; N=${2:-0}
 if [[ $P != */* ]]; then
   P=$(python3 -I "$(dirname "$0")/projects_dir.py" --name "$P" | sed -n 's/^SUGGEST //p')
 fi
+python3 -I -c "
+import os, sys; sys.path.insert(0, sys.argv[2]); import projects_dir as pd
+p = os.path.abspath(sys.argv[1]); r = pd.library_root(p)
+if r and (p + '/').startswith(os.path.join(r, 'Source Video') + '/'):
+    sys.exit(f'refused: {p} is inside Source Video/ of a library drive (raw clips only) — use {os.path.join(r, \"Video Production\")}/<YYYY-MM name>; projects_dir.py suggests one')
+" "$P" "$(dirname "$0")"
 mkdir -p "$P"/assets/{screens,screenrec,voiceover,music,models,video} "$P"/work/broll "$P"/out
 [ -f "$P/NOTES.md" ] || printf '# %s\n\nMaterial, decisions, what was cut and how to re-run. Absolute dates only.\n' "$(basename "$P")" > "$P/NOTES.md"
 if [ "$N" -gt 0 ]; then

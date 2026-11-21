@@ -21,7 +21,7 @@ horror = R.fw("ужас", after=S[4])
 
 band = R.free_bottom(ref_a, ref_b)  # card band under the face for these frames (face_zones.json)
 body = [
-    rg.seq(title_a, title_b, tag("TitleCard", title="lofiroom", pill="дневник разработки", pillNote="· 01", sub="idle-комната с живым персонажем"), "title"),
+    rg.seq(title_a, title_b, tag("TitleCard", title="devlog", pill="дневник разработки", pillNote="· 01", sub="маленькая игра с живым персонажем"), "title"),
     R.chapter(S[1], "01", "Идея"),
     rg.seq(ref_a, ref_b, tag("ImageCard", src="screens/ref_island.png", ratio=16 / 9, caption="Idle Island — с этого всё началось", top=band[0], maxH=band[1] - band[0]), "card · reference"),
     R.cutaway("crec_day_v", 31.0, proto_a, proto_b, "broll · the prototype", zoom=(1.05, 1.0)),

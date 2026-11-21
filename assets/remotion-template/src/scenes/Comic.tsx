@@ -74,9 +74,9 @@ export const ComicSfx: React.FC<{ words: ComicWord[]; until: number; burst?: { x
 };
 
 /**
- * Comic words BEHIND a person (the banana's laugh on the bike): the clip's own footage again with the Clip's punch / drift
+ * Comic words BEHIND a person (a laugh while riding past): the clip's own footage again with the Clip's punch / drift
  * (like Censor.tsx's BlurPatch: `at` = frames into the clip, `hold` = its length), the words, then the person cut out of the
- * same frames (person_matte.py → a VP9 WebM with alpha) on top — the banana rides in front of his own «ХА-ХА-ХА».
+ * same frames (person_matte.py → a VP9 WebM with alpha) on top — the person rides in front of their own «ХА-ХА-ХА».
  */
 export const ComicBehind: React.FC<{ src: string; trimBefore: number; matte: string; words: ComicWord[]; until: number; at?: number; punch?: number; drift?: number; hold?: number }> = ({
   src, trimBefore, matte, words, until, at = 0, punch = 1, drift = 0, hold = 1,

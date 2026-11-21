@@ -5,31 +5,31 @@ speed ramps, slow motion), punchline voices, text-behind-person cutouts → reel
 Used from the project's work/gen_action.py (copy assets/examples/gen_action.example.py):
     import actiongen as ag
     R = ag.Project(".", sources=["<folder with your clips>"])       # clip ids resolve like everywhere (clipid.py: DJI_…_0121_D → "0121")
-    shots = [R.shot("0121b", 16.0, beats=2, note="подруга нарезает круги"),
+    shots = [R.shot("0121b", 16.0, beats=2, note="runner circles the camera"),
              R.shot("0122b", [R.piece(72.4, 21), R.piece(73.1, 15, 0.4), R.piece(73.3, 15, 0.4), R.piece(73.5)], beats=4,
-                    x=0.78, note="удар на дропе", sync=(36, "drop"), punch=[1.06, 1.22], punchAt=34, flashAt=36, shake=True, shakeAt=36,
+                    x=0.78, note="jump on the drop", sync=(36, "drop"), punch=[1.06, 1.22], punchAt=34, flashAt=36, shake=True, shakeAt=36,
                     sfx=[(36, "hit")]),
-             R.shot("0091", 25.9, frames=62, voice=(25.9, 27.7), caption="…и просто стоит фоткает", captionAt=3),
-             R.shot("0087", 95.0, beats=1, behind={"title": "ХЭЛЛОУИН", "kicker": "31.10"})]
-    R.build(shots, end_frames=25, hook={"kicker": "31.10", "title": "ХЭЛЛОУИН", "from": 1, "to": 5})   # hook over shots 1–4 (0-based, to exclusive)
+             R.shot("0091", 25.9, frames=62, voice=(25.9, 27.7), caption="…и ещё один круг", captionAt=3),
+             R.shot("0087", 95.0, beats=1, behind={"title": "TITLE", "kicker": "01.06"})]
+    R.build(shots, end_frames=25, hook={"kicker": "01.06", "title": "TITLE", "from": 1, "to": 5})   # hook over shots 1–4 (0-based, to exclusive)
 Length: `beats=N` puts the cut exactly on the track's beat grid (work/track_beats.json from track_beats.py --start …): shot
 ends are computed on the continuous grid, so rounding never drifts; `frames=N` is a plain length. Pieces: R.piece(src_s, frames,
 speed) — the last piece may leave frames out and takes the rest of the shot. speed < actionSlowmo is retimed with
 motion-compensated interpolation (minterpolate), the browser would only repeat frames; > 1 is a plain speed-up.
-Crop: x="auto" (default) = Apple Vision people boxes (people_zones.py: main person + big neighbours that fit, sticky,
+Crop: x="auto" (default) = people boxes (people_zones.py / engines.py: main person + big neighbours that fit, sticky,
 smoothed, a pan when they move), x=0.4 a fixed centre, x=(0.65, 0.30) one value per piece, x=[0.6, 0.3] a linear pan over the
 shot; a vertical source is used as is. sync=(frame in shot, "drop" | "phrase" | reel frame) checks that the moment lands there.
 Effects (frames inside the shot): whip "left"/"right" (silent, directional blur — put them on phrase starts), punch [from, to],
 punchAt, flashAt (≤ 0.45), shake, shakeAt, hold (freeze frames after the shot, desaturated), caption (+ captionAt,
 captionTail; "\\n" = new line), voice (src_from, src_to) → a cleaned punchline (dualmic.py chain: declip, DeepFilterNet,
-automix) + voiceAt/voiceGain, sfx [(frame, kind)] — sound only where something happens (no whoosh on every cut: the user
-called it strange), battery (a camera-battery % top right; ≤ 9 blinks red), behind {"title", "kicker", "at", "until",
+automix) + voiceAt/voiceGain, sfx [(frame, kind)] — sound only where something happens (no whoosh on every cut: the same sound on
+every cut reads as a template), battery (a camera-battery % top right; ≤ 9 blinks red), behind {"title", "kicker", "at", "until",
 "mode": "person"|"subject"} → the title sits BEHIND the person (person_matte.py cuts them out of the same piece).
 Accents (transitions.md «Action accents»): bump (+ bumpAt) a push with a faint flash on the beat; crashAt a crash zoom landing on
 that frame (punch=[from, to]); rgbAt a short RGB split on a hit; stutterUntil the picture steps every stutterStep frames until
 that frame (into a drop); black=N pure black frames after the shot (the cold-open bumper: 3 shots × 9 f, black 6, then the
 hook); circle="auto" | {cx, cy, r} a marker loop over the freeze (hold=…; "auto" = the biggest face of the last frame).
-Budget (the user, 2026-11-09: «вжух на каждое действие» is a terrible video): WARNINGs when accents come closer than
+Budget (an effect on every action makes a bad video — most cuts stay plain): WARNINGs when accents come closer than
 seamFxGapShots plain shots, a kind repeats within seamRepeatSec, rgb > rgbMax, crash > crashMax, impacts (flash, shake) >
 impactMax or closer than impactGapBeats beats. The cut table also flags cuts where neither side moves (cut on motion).
 Writes reel/public/shots/s<NN><k>.mp4 (2K: the canvas × 4/3), reel/public/voice/v<NN>.wav, reel/public/shots/*.matte.webm,
@@ -37,6 +37,8 @@ work/shots.json, reel/src/shotsData.ts, work/action/sheet.jpg (the middle frame 
 sync table: every cut's frame and its distance to the nearest beat. Re-runs rebuild only shots whose spec changed.
 Prints ACTION_OK.
 """
+import sys as _sys
+if __name__ == "__main__" and ("-h" in _sys.argv[1:] or "--help" in _sys.argv[1:]): print(__doc__); _sys.exit(0)   # usage, no side effects
 import glob, hashlib, json, math, os, subprocess, sys, tempfile
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from common import N, atomic_json, canvas_size, clip_id, crop_expr, load_json, load_lut_map, lut_for, probe, title_place
@@ -97,6 +99,9 @@ class Project:
         info = self.info(f); span = info["h"] * self.W / self.H / info["w"]
         cid = clip_id(f); cp = f"work/people/{cid}.json"; os.makedirs("work/people", exist_ok=True)
         cache = self.caches.get(cid) or self.caches.setdefault(cid, load_json(cp, {}) or {})
+        eng = pz.ENGINES or pz.use_engines(script="actiongen.py")   # people + faces engines (engines.py); a cache from others is redone
+        if cache.get("engines", ["vision", "vision"]) != eng: cache.clear()
+        cache["engines"] = list(eng)
         frames = pz.scan(f, a, b, max(N["peopleFps"], 6), cache); atomic_json(cache, cp)
         keys, found = pz.path(frames, a, b, span)
         if not keys: print(f"WARNING: nobody found in {cid} {a:.1f}–{b:.1f} s — centre crop (set x=…)"); return [[a, 0.5], [b, 0.5]]

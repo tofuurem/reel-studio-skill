@@ -4,10 +4,14 @@
 Usage: python3 -I ingest.py <project> <source dir|file>… [--dry-run] [--camera skip|link|copy]
 
 Sorted by kind (a directory is walked recursively):
-  camera clips   any other video (DJI, phone, GoPro …) → stay where they are by default (`--camera skip`, scripts take their paths);
-                                                `link` puts symlinks into assets/camera/, `copy` copies them there
   screen recordings «Запись экрана — 2026-10-10 в 13.58.13.mov», «Screen Recording 2026-10-10 at 1.58.13 PM.mov»
-                                                → assets/screenrec/rec_20261010_135813.mov
+                                                → assets/screenrec/rec_20261010_135813.mov («RPReplay_Final…» → its ASCII name)
+  camera clips   a video with camera evidence (common.camera_evidence: a DJI djmd track, make / model tags of a phone or
+                 camera, a GoPro / DJI handler, a name the camera wrote — DJI_, GX01…, C0001, IMG_1234, VID_…, PXL_…)
+                                                → stay where they are by default (`--camera skip`, scripts take their paths);
+                                                `link` puts symlinks into assets/camera/, `copy` copies them there
+  video          any other video: an export, a download (fetch.py's <file>.source.json), b-roll from elsewhere
+                                                → assets/video/<name> (b-roll; is_camera() is False there)
   screenshots    «Снимок экрана — … .png», «Screenshot 2026-10-09 at 16.10.38.png» → assets/screens/shot_20261009_161038.png
                  («… (2).png» → …_2.png)
   images         png/jpg/jpeg/webp/gif           → assets/screens/<name>   («image-1791478480074.png» → img_1791478480074.png)
@@ -28,7 +32,7 @@ holds the real name. The mapping goes to assets/ingest_log.json (source → targ
 """
 import argparse, json, os, re, shutil, subprocess, sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from common import ascii_stem, atomic_json, duration, is_camera, nfc
+from common import ascii_stem, atomic_json, camera_evidence, duration, is_camera, is_screen_recording, nfc
 
 ap = argparse.ArgumentParser(); ap.add_argument("project"); ap.add_argument("sources", nargs="+")
 ap.add_argument("--dry-run", action="store_true"); ap.add_argument("--camera", choices=["skip", "link", "copy"], default="skip")
@@ -64,8 +68,8 @@ def classify(path):
         if ap_ == "AM" and hh == 12: hh = 0
         stamp = f"{m[1]}{m[2]}{m[3]}_{hh:02d}{m[5]}{m[6]}" + (f"_{m[8]}" if m[8] else "")
     out_ext = ".jpg" if ext == ".heic" else ext; note = "heic→jpg" if ext == ".heic" else ""
-    if ext in VIDEO and stamp and re.search(r"запись\s+экрана|screen\s+recording", stem, re.I): return "screenrec", "screenrec", f"rec_{stamp}{ext}", ""
-    if ext in VIDEO and is_camera(path): return "camera", "camera", name, ""
+    if ext in VIDEO and is_screen_recording(path): return "screenrec", "screenrec", (f"rec_{stamp}" if stamp else ascii_name(stem)) + ext, ""
+    if ext in VIDEO and is_camera(path) and camera_evidence(path): return "camera", "camera", name, ""
     if ext in IMAGE and stamp and re.search(r"снимок\s+экрана|screen\s*shot", stem, re.I): return "screens", "screenshot", f"shot_{stamp}{out_ext}", note
     if ext in IMAGE:
         m2 = re.match(r"image-(\d+)$", stem)
@@ -74,7 +78,7 @@ def classify(path):
         if re.search(r"music|музык|\bbed\b|track|song|песн", nfc(path).lower()): return "music", "music", ascii_name(stem) + ext, ""
         d = duration(path)
         return "voiceover", "audio", ascii_name(stem) + ext, (f"check: long audio ({d:.0f} s) — music? move it to assets/music" if d > LONG_AUDIO else "")
-    if ext in VIDEO: return "video", "video", ascii_name(stem) + ext, ""
+    if ext in VIDEO: return "video", "video", ascii_name(stem) + ext, ("" if "/assets/video/" in nfc(path) else "no camera tags: export / download → b-roll; the user's own clip that lost its tags → pass its path to the scripts")
     if ext in MODEL: return "models", "model", ascii_name(stem) + ext, ""
     return None, "other", name, ""
 

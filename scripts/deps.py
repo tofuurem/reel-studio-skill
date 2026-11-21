@@ -2,7 +2,7 @@
 """Check — and with --install, install — everything the skill needs, for the OS it runs on. Standard library only: it runs
 before any venv exists, on a bare machine. setup_env.sh calls it first; on Linux run it yourself first (zsh may be missing).
 
-Usage: python3 -I deps.py [--install] [--dry-run] [--with covers] [--with sound]
+Usage: python3 -I deps.py [--install] [--dry-run] [--with covers] [--with sound] [--with linux-vision] [--with fast-asr]
   (no flag)   report: platform, every tool / library / python env with its version, what is missing and the command that fixes
               it, and which parts of the skill this platform cannot run
   --install   install what is missing: system packages (brew / apt / dnf / pacman), uv, then the shared python envs in
@@ -13,16 +13,21 @@ Usage: python3 -I deps.py [--install] [--dry-run] [--with covers] [--with sound]
   --with sound   also earshot (ask the user first: ≈ 1.6 GB with its two listening models, CPU only): designed sound effects
               instead of the synthesized ones (make_sfx.sh → sfx_bank.py), ranking of real sounds found on Openverse
               (sfx_find.py), a listening check of the render (ears.py), moments found by sound (earshot find)
+  --with linux-vision  the open picture engines into the venv (engines.py; always part of the install on Linux — no flag
+              needed there; optional on macOS): OpenCV
+              (YuNet faces), RapidOCR + onnxruntime (onnxruntime-gpu with an NVIDIA GPU), MediaPipe hands when a wheel exists
+              for this platform, transformers + timm when missing (RT-DETR people, DINOv2, SigLIP 2, AST sounds, BiRefNet)
+  --with fast-asr      faster-whisper into the venv: Whisper on the CPU (int8) or CUDA (fp16), several times faster than openai-whisper
+The report ends with the engines table (engines.py): per capability the chosen engine and the engines that run here.
 Speech: GigaAM v3 for Russian (gigvenv), Whisper for every other language (venv).
 Prints DEPS_OK (the pipeline can run here) or DEPS_MISSING <n> (exit 1).
 
-Platforms
-  macOS, Apple Silicon   everything
-  macOS, Intel           no MLX: Whisper runs as openai-whisper (CPU, slower), no vlm_describe.py; GigaAM runs on the CPU as everywhere
-  Linux (and WSL2)       no Apple Vision: face_zones / people_zones / person_matte / cutout do not run → no people-aware 9:16 crop
-                         of landscape footage (use a 16:9 canvas or crop keys by hand), no title behind the person, no cut-out
-                         covers; no vlm_describe.py (MLX); Whisper as openai-whisper (CUDA if an NVIDIA GPU is visible, else CPU); no hardware decode (software decode, slower); no memory guard
-                         (mem_guard.py reads macOS's footprint — the heavy scripts then run unguarded)
+Platforms (picture and sound models: one engine per capability, engines.py; references/engines.md)
+  macOS, Apple Silicon   everything; Apple Vision / SoundAnalysis / MLX by default, the open engines with --with linux-vision
+  macOS, Intel           no MLX: Whisper runs as openai-whisper (CPU, slower), frame descriptions through transformers
+  Linux (and WSL2)       CPU, optionally NVIDIA CUDA: YuNet faces, RT-DETR people, MediaPipe hands, RapidOCR, DINOv2 prints, SigLIP 2
+                         labels, BiRefNet masks and cut-outs, AST sounds (linux-vision, installed by default); Whisper as faster-whisper (--with
+                         fast-asr) or openai-whisper; no aesthetic score; hardware decode only with NVIDIA (cuda), else software
   Speech recognition     Russian: GigaAM v3 (gigvenv, onnxruntime on the CPU, every platform); other languages: Whisper (venv)
   Windows                not native (zsh scripts, POSIX paths): install WSL2 + Ubuntu and run the skill inside it
 """
@@ -54,7 +59,8 @@ PKG = {   # tool → package per manager (None: comes with the OS)
     "curl": {"brew": None, "apt": "curl ca-certificates", "dnf": "curl", "pacman": "curl"},
     "uv": {"brew": "uv", "pacman": "uv"},                                     # elsewhere: astral's user-level installer
     "heif-convert": {"apt": "libheif-examples", "dnf": "libheif-tools", "pacman": "libheif"},
-    "yt-dlp": {"brew": "yt-dlp"},                                             # brew brings deno (YouTube); distro packages lag behind the sites
+    "yt-dlp": {"brew": "yt-dlp"},
+    "egl": {"apt": "libegl1 libgles2", "dnf": "mesa-libEGL mesa-libGLES", "pacman": "libglvnd"},   # MediaPipe's tasks library dlopens them                                             # brew brings deno (YouTube); distro packages lag behind the sites
 }
 
 def run(cmd, **kw):
@@ -143,7 +149,23 @@ def earshot_state():
     return v, size > 800 * 2 ** 20
 
 
-def check(p, want_covers=False, want_sound=False):
+def extra_specs(p):
+    """--with extras that go into the shared venv: name → (import check, pip packages, optional packages (may have no wheel), what)."""
+    return {
+        "linux-vision": (["cv2", "rapidocr_onnxruntime", "onnxruntime", "transformers", "timm"],
+                         ["opencv-python-headless", "rapidocr-onnxruntime", "onnxruntime-gpu" if p["nvidia"] else "onnxruntime", "transformers", "timm"],
+                         ["mediapipe"], "open picture engines: YuNet faces, RapidOCR, MediaPipe hands (engines.py)"),
+        "fast-asr": (["faster_whisper"], ["faster-whisper"], [], "faster-whisper (Whisper on CPU int8 / CUDA fp16)"),
+    }
+
+def engine_rows():
+    """engines.py --json from the venv python (where the engines live), else from this python."""
+    py = os.path.join(CACHE, "venv", "bin", "python")
+    r = run([py if os.path.exists(py) else sys.executable, "-I", os.path.join(os.path.dirname(os.path.abspath(__file__)), "engines.py"), "--json"], timeout=120)
+    try: return json.loads(r.stdout)
+    except ValueError: return []
+
+def check(p, want_covers=False, want_sound=False, extras=()):
     R, pm = Report(), p["pm"]
     def pkg(tool): return (PKG.get(tool) or {}).get(pm)
     def sys_fix(tool): return ("pkg", tool) if pkg(tool) else None
@@ -183,6 +205,9 @@ def check(p, want_covers=False, want_sound=False):
         if not have and os.path.exists("/sbin/ldconfig"): have = run(["/sbin/ldconfig", "-p"]).stdout
         miss = [so for so in CHROME_LIBS if so not in have]
         R.add(not miss, "chrome libs", "for Remotion's headless Chrome" + (f" — missing {', '.join(miss)}" if miss else ""), ("libs", miss) if miss else None)
+        if "linux-vision" in extras:
+            egl = [so for so in ("libEGL.so.1", "libGLESv2.so.2") if so not in have]
+            R.add(not egl, "EGL / GLES libs", "MediaPipe hands" + (f" — missing {', '.join(egl)}" if egl else ""), sys_fix("egl") if egl else None, required=False)
         hc = bool(shutil.which("heif-convert") or shutil.which("magick"))
         R.add(hc, "heif-convert", "" if hc else "ingest.py converts iPhone HEIC photos with it", sys_fix("heif-convert"), required=False)
     yv = ver(["yt-dlp", "--version"], r"(\S+)")
@@ -194,6 +219,14 @@ def check(p, want_covers=False, want_sound=False):
         ok = os.path.exists(py) and run([py, "-I", "-c", "import " + ", ".join(mods)], timeout=120).returncode == 0
         if ok and name == "dfvenv": ok = os.path.exists(os.path.join(CACHE, name, "bin", "deepFilter"))
         R.add(ok, f"env {name}", what, ("venv", name), required=name != "vlmvenv")   # vlmvenv: optional frame descriptions
+    vpy = os.path.join(CACHE, "venv", "bin", "python")
+    for name, (mods, pkgs, opt, what) in extra_specs(p).items():
+        want = name in extras
+        ok = os.path.exists(vpy) and run([vpy, "-I", "-c", "import " + ", ".join(mods)], timeout=120).returncode == 0
+        if ok and opt:
+            have = [m for m in opt if run([vpy, "-I", "-c", f"import {m}"], timeout=120).returncode == 0]
+            what += "" if len(have) == len(opt) else f" — without {', '.join(m for m in opt if m not in have)} (no wheel here?)"
+        R.add(ok, f"{name} (venv)", what if (ok or want) else f"optional: {what} — --install --with {name}", ("extra", name) if want else None, required=want)
     ev, models = earshot_state()
     es_ok = bool(ev) and ev.lstrip("v") == EARSHOT.lstrip("v") and models
     info = (f"{ev}" + ("" if models else " — listening models not downloaded") + ("" if not ev or ev.lstrip("v") == EARSHOT.lstrip("v") else f" — the skill wants {EARSHOT}")) if ev else \
@@ -209,15 +242,29 @@ def check(p, want_covers=False, want_sound=False):
     R.add(not fonts, "fonts", "template fonts in ~/.cache/reel-studio/fonts" + (" — setup_env.sh downloads them" if fonts else ""), required=False)
     return R
 
-def limits(p):
+DEGRADED = {   # engine → what is different from the macOS default (references/engines.md has the numbers)
+    "yunet": "faces: YuNet — misses more small / turned faces than Vision; boxes mapped onto Vision's geometry",
+    "rtdetr": "people: RT-DETR — finds more background people than Vision, slower on a CPU (lower people_zones --fps on long cuts)",
+    "none": "{cap}: none — " + "{why}",
+    "rapidocr": "ocr: RapidOCR (PP-OCRv5 Cyrillic) — more misreads on stylised captions than Vision",
+    "dinov2": "feature_print: DINOv2 — cosine distances, its own scene threshold (calibrate with video-library's vm_frames.py --calib)",
+    "siglip": "labels: SigLIP 2 zero-shot over Vision's vocabulary — flat labels (no parent categories like «outdoor»)",
+    "ast": "sound_events: AST (AudioSet labels, not SoundAnalysis') — the video map's sound words differ",
+    "openai": "whisper: openai-whisper — several times slower than mlx / faster-whisper (--with fast-asr)",
+}
+NONE_WHY = {"hands": "no hand boxes (MediaPipe not installed, or no wheel for this platform): censor hands jobs are empty, follow keys are not snapped",
+            "aesthetics": "no aesthetic score in the video map", "decode": "software decode, proxies take longer"}
+
+def limits(p, rows=None):
+    """What runs degraded (or not at all) here, per capability, from the engines table."""
     out = []
-    if not p["mac"]:
-        out += ["Apple Vision (macOS only): face_zones.py, people_zones.py, person_matte.py, cutout.py do not run — no people-aware "
-                "9:16 crop of landscape footage (16:9 canvas, or crop keys by hand), no title behind the person, no cut-out covers",
-                "hardware decode (videotoolbox): software decode, proxies take longer"]
-    if not p["apple_silicon"]:
-        out += ["MLX (Apple Silicon only): Whisper (speech other than Russian) runs as openai-whisper" + (" on CUDA" if p["nvidia"] else " on the CPU — several times slower")
-                + "; vlm_describe.py (Qwen3-VL frame descriptions) does not run"]
+    for r in rows if rows is not None else engine_rows():
+        e, cap = r.get("engine"), r["cap"]
+        if r.get("missing"):
+            out.append(f"{cap}: {e} cannot run — {r['missing']}" + (f" ({r['fix']})" if r.get("fix") else "") +
+                       (f"; runs here: {', '.join(r['available'])}" if r.get("available") else ""))
+        elif e == "none": out.append(f"{cap}: none — {NONE_WHY.get(cap, '')}")
+        elif e in DEGRADED and e != "none": out.append(DEGRADED[e])
     return out
 
 def sh(cmd, dry):
@@ -234,6 +281,7 @@ def root_prefix(dry):
 
 def install(p, R, dry):
     pm, manual = p["pm"], []
+    uv = shutil.which("uv") or os.path.expanduser("~/.local/bin/uv")
     pkgs = []
     for kind, what in R.fix:
         if kind == "pkg": pkgs += PKG[what][pm].split()
@@ -277,28 +325,45 @@ def install(p, R, dry):
             torch = [x for x in pkgs_v if x.startswith(("torch", "torchaudio"))] or ["torch"]
             sh([uv, "pip", "install", "--python", py, "--index-url", idx, *torch], dry)
         sh([uv, "pip", "install", "--python", py, *pkgs_v], dry)
+    vpy = os.path.join(CACHE, "venv", "bin", "python")
+    for kind, name in R.fix:   # extras go into the venv after it exists
+        if kind != "extra": continue
+        mods, pkgs_x, opt, what = extra_specs(p)[name]
+        if not os.path.exists(vpy) and not dry: manual.append(f"--with {name}: build the venv first (deps.py --install)"); continue
+        print(f"  {name}: {what}")
+        sh([uv, "pip", "install", "--python", vpy, *pkgs_x], dry)
+        for o in opt:   # mediapipe has no wheel for every platform / python: its engine then stays unavailable ("none")
+            if not sh([uv, "pip", "install", "--python", vpy, o], dry) and not dry: print(f"  {o}: no wheel for this platform — that engine stays unavailable")
     return manual
 
 def show(p, R):
     print(f"platform: {p['name']}" + (f" · package manager: {p['pm']}" if p["pm"] else "") + (" · NVIDIA GPU" if p["nvidia"] else ""))
     for state, name, info in R.rows: print(f"  {state:<8} {name:<20} {info}")
-    lim = limits(p)
-    if lim: print("not on this platform:"); [print("  - " + x) for x in lim]
+    rows = engine_rows()
+    if rows:
+        print("engines (engines.py; change: engines.py set <cap> <engine>):")
+        for r in rows: print(f"  {r['cap']:<14} {str(r['engine']):<14} ({r['why']})  runs here: {', '.join(r['available']) or '—'}")
+    lim = limits(p, rows)
+    if lim: print("degraded or missing here:"); [print("  - " + x) for x in lim]
 
 def main():
     sys.stdout.reconfigure(line_buffering=True)   # keep our lines in order with the installers' output
     ap = argparse.ArgumentParser(description="Check / install the skill's dependencies for this OS.")
     ap.add_argument("--install", action="store_true"); ap.add_argument("--dry-run", action="store_true")
-    ap.add_argument("--with", dest="extras", action="append", default=[], choices=["covers", "sound"],
-                    help="optional parts the user agreed to: covers = Codex CLI for generated cover plates; sound = earshot (designed SFX, listening checks; ≈ 1.6 GB)")
+    ap.add_argument("--with", dest="extras", action="append", default=[], choices=["covers", "sound", "linux-vision", "fast-asr"],
+                    help="optional parts the user agreed to: covers = Codex CLI for generated cover plates; sound = earshot (designed SFX, listening checks; ≈ 1.6 GB); "
+                         "linux-vision = open picture engines in the venv (OpenCV, RapidOCR, MediaPipe; automatic on Linux); fast-asr = faster-whisper")
     a = ap.parse_args()
     covers = "covers" in a.extras
     sound = "sound" in a.extras
-    p = plat(); R = check(p, covers, sound)
+    venv_extras = [x for x in a.extras if x in ("linux-vision", "fast-asr")]
+    p = plat()
+    if p["system"] == "Linux" and "linux-vision" not in venv_extras: venv_extras.append("linux-vision")   # Linux has no Apple Vision: required
+    R = check(p, covers, sound, venv_extras)
     if a.install and R.fix and p["system"] in ("Darwin", "Linux"):
         show(p, R); print("installing:")
         manual = install(p, R, a.dry_run)
-        if not a.dry_run: R = check(p, covers, sound); print("after install:")
+        if not a.dry_run: R = check(p, covers, sound, venv_extras); print("after install:")
         else: manual += [w for k, w in R.fix if k == "manual" and w not in manual]
         show(p, R)
         if manual: print("run yourself:"); [print("  " + m) for m in dict.fromkeys(manual)]

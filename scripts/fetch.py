@@ -1,13 +1,19 @@
 #!/usr/bin/env python3
-"""Download a video or a track by link (yt-dlp) into the project — for analysis and the beat grid, never as footage of someone else.
+"""Download a video or a track by link (yt-dlp) into the project — for analysis and the beat grid; someone else's footage IN the
+reel only with --as footage after the user's explicit yes (styles.md «real footage»).
 
-Usage: python3 -I fetch.py <project> <url> [--as ref|music|own] [--name NAME] [--section START-END]
+Usage: python3 -I fetch.py <project> <url> [--as ref|music|own|footage] [--name NAME] [--section START-END]
   --as ref    (default) a reel to learn the style from → assets/refs/<name>.mp4; then ref_analyze.py measures it
                         (inputs/reference-reel.md). Its picture, sound, text and people never go into the user's video.
   --as music  the audio of a track → assets/music/<name>.m4a: track_beats.py finds its beat grid for an action reel (the
                         published reel has no music; the user adds the same track in Instagram). A bed rendered INTO the
                         file only with a track the user has the rights to.
   --as own    the user's own published episode → assets/refs/own/<name>.mp4 (series continuity: look, covers, rhythm).
+  --as footage  someone else's video to show in the reel (gameplay, a product demo) → assets/video/<name>.mp4, picture only,
+                        ≤ 1080p; only after the user said yes to using it. Short pieces, the author credited on screen
+                        (`credit` on ImageCard / VideoCard / BRoll / ComicPanel), a sources table in NOTES.md (title, author,
+                        link, licence, what was taken). Prints the credit line to use. Other people's footage needs the
+                        owner's permission or a licence that allows reuse; respect the platform's terms.
   --section   only that part, e.g. 0:30-1:15 (long videos).
 Writes <file>.source.json next to the file (url, title, uploader, duration, date fetched) — what it is and where it came from.
 A site that wants a sign-in (Instagram often does) fails with a clear message: ask the user to download the file themselves
@@ -18,7 +24,7 @@ import argparse, datetime, glob, json, os, re, shutil, subprocess, sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from common import ascii_stem, atomic_json
 
-DEST = {"ref": "assets/refs", "music": "assets/music", "own": "assets/refs/own"}
+DEST = {"ref": "assets/refs", "music": "assets/music", "own": "assets/refs/own", "footage": "assets/video"}
 LOGIN = re.compile(r"log ?in|sign ?in|cookies|private|rate-limit|age-restricted|confirm you.re not a bot", re.I)
 
 
@@ -42,6 +48,8 @@ def main():
     cmd = ["yt-dlp", "--no-playlist", "--no-warnings", "--quiet", "--progress", "--no-mtime", "-o", stem + ".%(ext)s"]
     if a.kind == "music":
         cmd += ["-f", "bestaudio[ext=m4a]/bestaudio", "-x", "--audio-format", "m4a"]; ext = ".m4a"
+    elif a.kind == "footage":   # picture only: someone else's sound is not used; 1080p is enough for a card or a cutaway
+        cmd += ["-f", "bv*[height<=1080][ext=mp4]/bv*[height<=1080]/b[height<=1080]", "--merge-output-format", "mp4"]; ext = ".mp4"
     else:   # vertical reels are ≤ 1920 tall; a 4K landscape original is not needed to measure rhythm and framing
         cmd += ["-f", "bv*[height<=1920][ext=mp4]+ba[ext=m4a]/bv*[height<=1920]+ba/b[height<=1920]/b", "--merge-output-format", "mp4"]; ext = ".mp4"
     if a.section: cmd += ["--download-sections", "*" + a.section, "--force-keyframes-at-cuts"]
@@ -52,8 +60,12 @@ def main():
         if r.returncode == 0 and len(got) == 1: path = got[0]
         else: sys.exit(f"download failed (yt-dlp exit {r.returncode}) — try again later or ask the user for the file")
     atomic_json({"url": a.url, "kind": a.kind, "title": info.get("title"), "uploader": info.get("uploader"), "duration": info.get("duration"),
-                 "uploaded": info.get("upload_date"), "section": a.section, "fetched": datetime.date.today().isoformat()}, path + ".source.json")
+                 "uploaded": info.get("upload_date"), "license": info.get("license"), "section": a.section, "fetched": datetime.date.today().isoformat()}, path + ".source.json")
     print(f"{info.get('title')!r} by {info.get('uploader')} ({info.get('duration')} s)")
+    if a.kind == "footage":
+        site = info.get("extractor_key") or info.get("extractor") or "web"
+        print(f"licence: {info.get('license') or 'standard (not CC) — short pieces with a credit, and only with the user’s yes'}")
+        print(f"CREDIT: footage: {info.get('uploader') or info.get('channel') or '?'} · {'YouTube' if 'youtube' in site.lower() else site}")
     print("FETCH_DONE", path)
 
 

@@ -12,7 +12,7 @@ picture, sound, music, text, people, faces and logos never go into the user's vi
 2. **Measure.** `work/venv/bin/python -I $S/ref_analyze.py <project> assets/refs/<name>.mp4` → `work/refs/<name>/ref.md`,
    `ref.json`, `sheet.jpg` (≈ 20 s per minute on an M-series Mac). It lists every shot (hard cuts, short dissolves, dissolved jump
    cuts and the cutaways), the shot lengths, the hook, the
-   framing per shot (Apple Vision faces), the on-screen text (OCR, ru + en): where the caption rail sits, letter height,
+   framing per shot (faces), the on-screen text (OCR, ru + en; engines.py): where the caption rail sits, letter height,
    words and lines per page, page length, ALL CAPS — and the loudness. Linux: no Vision → framing and text are skipped.
 3. **Look.** Open `sheet.jpg` and watch the reference once at speed. Name what the numbers cannot: the transition kinds
    (a whip, a zoom, a hand-off — count them against `transitions.md` §1), the graphics (cards, stickers, a progress bar),

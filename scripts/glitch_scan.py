@@ -5,10 +5,12 @@ Usage: glitch_scan.py <video.mp4> [--expect N] [y0 h]...   default bands for a 2
 A frame is bad when its band differs strongly from BOTH neighbours while the neighbours match each other.
 Exit codes: 0 = GLITCH_SCAN CLEAN; 1 = dropouts found (look, then re-render); 2 = the file itself is broken — missing, empty,
 or fewer frames decoded than it holds / than --expect (render.sh passes the raw render's frame count): a truncated file is
-never "clean" (audit 2026-10-22: a missing file used to print CLEAN).
+never "clean" (a missing file must not print CLEAN).
 False positives: a laptop or phone screen inside the footage can refresh for one frame, a hard flash cut can too — look at a
 flagged frame before re-rendering.
 """
+import sys as _sys
+if __name__ == "__main__" and ("-h" in _sys.argv[1:] or "--help" in _sys.argv[1:]): print(__doc__); _sys.exit(0)   # usage, no side effects
 import os, subprocess, sys
 import numpy as np
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))

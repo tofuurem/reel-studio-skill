@@ -9,6 +9,7 @@
 # plan.json "files": {"vo01": "work/vo/vo_01_x.mp4", "sil": "work/vo/silence.mp4"}; wordless stretches (cold open, a breath
 # after a punchline, the end) are ranges of the silent carrier with {"mute": true}. Every carrier frame must be covered
 # by a Board / BRoll in Reel.tsx — the carrier itself is just a dark frame.
+[[ "${1:-}" == "-h" || "${1:-}" == "--help" ]] && { awk 'NR>1 && /^#/ {sub(/^# ?/, ""); print; next} NR>1 {exit}' "$0"; exit 0; }
 set -e -o pipefail; setopt null_glob
 P=$(cd "${1:?project}" && pwd); shift; SK=$(cd "$(dirname "$0")" && pwd); mkdir -p "$P/work/vo"; SIL=30
 if [ "$1" = "--silence" ]; then SIL=$2; shift 2; fi

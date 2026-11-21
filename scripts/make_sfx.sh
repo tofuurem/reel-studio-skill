@@ -3,7 +3,7 @@
 # whoosh (chapter tag), softwhoosh (a scan or a slide), and for action reels hit (the drop / a punch), shutter (a photo
 # moment, a freeze), rewind (a replay), riser (into a drop or a reveal), beep (low battery, a warning), powerdown (the end).
 # whoosh / softwhoosh / pop / hit come in sfxVariants versions (whoosh, whoosh2, whoosh3 …): reelgen.sfx() cycles them, so
-# two whooshes in a row are never the same sample («одинаковый вжух на каждый переход — странно», Halloween reel).
+# two whooshes in a row are never the same sample (the same whoosh on every seam reads as a template).
 # Usage: make_sfx.sh <project-dir>   → reel/public/audio/sfx/*.wav      (SFX=synth make_sfx.sh … keeps the synthesized set)
 # With earshot installed (deps.py --with sound) the synthesized set is the reference: sfx_bank.py replaces every kind it has
 # with a designed sound from earshot's bank at the same loudness (originals in audio/sfx/synth/ for an A/B; rewind and
@@ -11,6 +11,7 @@
 # tick / pop / done keep their fixed synthesis gains (the numbers.json levels were tuned on them); everything else is
 # peak-normalised to −6 dBFS. Levels in Remotion come from numbers.json (sfx*: quiet, ≈ 20 LU under speech; hit is the
 # one loud exception in an action reel).
+[[ "${1:-}" == "-h" || "${1:-}" == "--help" ]] && { awk 'NR>1 && /^#/ {sub(/^# ?/, ""); print; next} NR>1 {exit}' "$0"; exit 0; }
 set -e
 P="$1"; D="$P/reel/public/audio/sfx"; mkdir -p "$D"   # the loops below reuse $1 (set --)
 ff(){ ffmpeg -v error -nostdin -y "$@"; }

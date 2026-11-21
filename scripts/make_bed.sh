@@ -3,9 +3,9 @@
 # encodes the sound once, at the end).
 # Usage: make_bed.sh <project-dir> [seconds] [warm|night|bright|dusk|spooky]      (or make_bed.sh <project-dir> <preset>)
 #        seconds default = work/cutlist.json totalFrames/30 + numbers.json bedTailSec (15 s: the end card and the fade)
-# Offer the user's own track first (assets/music): the procedural bed is recognisably the same in every video («такой же как
-# всегда», BRX promo 2026-10-10). Use a different preset per video. The bed is −29.7 LUFS at unity → volume 0.18 (numbers.json
+# Offer the user's own track first (assets/music): the procedural bed is recognisably the same in every video. Use a different preset per video. The bed is −29.7 LUFS at unity → volume 0.18 (numbers.json
 # bedUnder) ≈ 20 LU under speech, 0.3 (bedOpen) in the cold open and the tail. Also writes work/beats.json (the beat grid).
+[[ "${1:-}" == "-h" || "${1:-}" == "--help" ]] && { awk 'NR>1 && /^#/ {sub(/^# ?/, ""); print; next} NR>1 {exit}' "$0"; exit 0; }
 set -e -o pipefail
 P=$(cd "${1:?project}" && pwd); SEC=$2; PRESET=${3:-warm}; SK=$(cd "$(dirname "$0")" && pwd)
 case "$SEC" in warm|night|bright|dusk|spooky) PRESET=$SEC; SEC="";; esac

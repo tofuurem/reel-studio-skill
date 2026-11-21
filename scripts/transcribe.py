@@ -2,15 +2,17 @@
 """Build the timeline speech track from the cut list and transcribe it with word timestamps.
 
 Usage: work/gigvenv/bin/python -I transcribe.py [--cutlist work/cutlist.json] [--public reel/public] [--lang ru] [--audio-only] [--max-gb 6]
+           [--engine mlx|faster|openai]   (Whisper engine for languages other than ru; default: engines.py choice)
        work/gigvenv/bin/python -I transcribe.py --sources <camera files…>   → work/new/c<id>.json (per-source word JSONs for cut_from_transcript.py / raw takes)
 The recognizer follows --lang:
 - ru (default): GigaAM v3 + Silero VAD (transcribe_gigaam.py's engine, ≈ 20× realtime on CPU, punctuation included); the first
   run downloads the model (≈ 1 GB) from Hugging Face. Word ends are approximations (the last token's 40 ms emission + 0.12 s):
   ±0.1–0.26 s against a hand check — never trim a cut on them.
-- any other language (en, de, es …): Whisper large-v3-turbo (mlx-whisper on Apple Silicon, openai-whisper elsewhere; ≈ 1.6 GB on
-  the first run) — it invents text on silence, so never feed it silent recordings.
+- any other language (en, de, es …): Whisper large-v3-turbo through engines.py — mlx-whisper on Apple Silicon, faster-whisper
+  (int8 on the CPU, fp16 on CUDA; deps.py --with fast-asr) or openai-whisper elsewhere; ≈ 1.6 GB on the first run. Every engine
+  returns the same openai-whisper dict. It invents text on silence, so never feed it silent recordings.
 Each engine lives in its own env (gigvenv / venv): started from the other one, the script re-runs itself under the right python.
-It re-runs itself under mem_guard.py on macOS (exit 137 when the guard stopped it; --no-guard skips it).
+It re-runs itself under mem_guard.py on macOS and Linux (exit 137 when the guard stopped it; --no-guard skips it).
 Output has the Whisper-shaped dict make_captions.py / tl_words.py / bleeps_from_timeline.py read: {text, segments:[{start, end, text,
 words:[{word (leading space, punctuation attached), start, end, probability}]}], language}.
 
@@ -28,6 +30,7 @@ Writes work/audio/timeline.wav + work/audio/timeline.json. --audio-only stops af
 import argparse, json, os, subprocess, sys, wave
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from common import add_guard_args, clip_id, guard_reexec, load_offsets, proxy_file, speech_tracks, src_dur
+import engines
 
 SR = 16000
 
@@ -80,8 +83,12 @@ def ensure_engine(a):
     """GigaAM lives in work/gigvenv, Whisper in work/venv: switch to the python that has the engine for --lang (once)."""
     if a.audio_only: return
     import importlib.util
-    mods, env = (["onnx_asr"], "gigvenv") if a.lang == "ru" else (["mlx_whisper", "whisper"], "venv")
-    if any(importlib.util.find_spec(m) for m in mods): return
+    if a.lang == "ru":
+        env = "gigvenv"
+        if importlib.util.find_spec("onnx_asr"): return
+    else:
+        env = "venv"
+        if not engines.missing("whisper", engines.choose("whisper", a.engine)): return
     py = os.path.abspath(f"work/{env}/bin/python")
     if not os.path.exists(py) or os.environ.get("TRANSCRIBE_SWITCHED"):
         sys.exit(f"{'GigaAM' if env == 'gigvenv' else 'Whisper'} is not installed for this python and work/{env} is missing — run setup_env.sh")
@@ -105,15 +112,10 @@ def gigaam(wavs, a):
     return out
 
 def whisper(wavs, a):
-    """Whisper for every language GigaAM does not cover: mlx-whisper on Apple Silicon, openai-whisper elsewhere (same dict)."""
-    try: import mlx_whisper
-    except ImportError: mlx_whisper = None
-    if mlx_whisper: return [mlx_whisper.transcribe(w, path_or_hf_repo=a.whisper_model, language=a.lang, word_timestamps=True, verbose=False) for w in wavs]
-    import whisper as ow
-    name = a.whisper_model.rsplit("/", 1)[-1].removeprefix("whisper-")   # mlx-community/whisper-large-v3-turbo → large-v3-turbo
-    print(f"whisper: openai-whisper {name} (no MLX here — slower)", flush=True)
-    m = ow.load_model(name)
-    return [m.transcribe(w, language=a.lang, word_timestamps=True, verbose=False) for w in wavs]
+    """Whisper for every language GigaAM does not cover (engines.py: mlx / faster / openai — the same openai-whisper dict)."""
+    e = engines.require("whisper", "transcribe.py", a.engine)
+    if e != "mlx": print(f"whisper: {e}-whisper {engines.whisper_name(a.whisper_model)}" + (" (no MLX here — slower)" if e == "openai" else ""), flush=True)
+    return [engines.transcribe(w, a.lang, a.whisper_model, e) for w in wavs]
 
 def recognize(wavs, a):
     return gigaam(wavs, a) if a.lang == "ru" else whisper(wavs, a)
@@ -122,7 +124,8 @@ def main():
     ap = argparse.ArgumentParser(); ap.add_argument("--cutlist", default="work/cutlist.json"); ap.add_argument("--public", default="reel/public")
     ap.add_argument("--lang", default="ru", help="ru → GigaAM; any other code (en, de …) → Whisper")
     ap.add_argument("--model", default="gigaam-v3-e2e-rnnt", help="onnx-asr model name (gigaam-v3-rnnt: no punctuation)")
-    ap.add_argument("--whisper-model", default="mlx-community/whisper-large-v3-turbo", help="Whisper model for languages other than ru")
+    ap.add_argument("--whisper-model", default="mlx-community/whisper-large-v3-turbo", help="Whisper model for languages other than ru (any spelling: large-v3-turbo, small …)")
+    ap.add_argument("--engine", choices=engines.ENGINES["whisper"], help="Whisper engine (default: engines.py choice — mlx on Apple Silicon, faster / openai elsewhere)")
     add_guard_args(ap, 6.0)
     ap.add_argument("--sources", nargs="*", help="transcribe these camera files (or isolated-voice WAVs) instead of the timeline → work/new/c<id>.json")
     ap.add_argument("--audio-only", action="store_true", help="build work/audio/timeline.wav and stop")

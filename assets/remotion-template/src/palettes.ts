@@ -33,7 +33,7 @@ export type Palette = {
 };
 
 export const palettes = {
-  /** lofiroom devlog: warm night room, coral + amber. */
+  /** Devlog: warm night room, coral + amber. */
   warm: {
     bg: "#0E0C0B",
     ink: "#FFFFFF",
@@ -62,7 +62,7 @@ export const palettes = {
     claude: "#D97757",
     black: "#000000",
   },
-  /** «Ночной бассейн» (birthday reel): pool water at night, aqua light + gold villa lamps. */
+  /** Night pool: pool water at night, aqua light + gold lamps. */
   nightPool: {
     bg: "#0B1A20",
     ink: "#F4F7F7",

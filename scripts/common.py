@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Shared helpers for the reel-studio scripts — one copy of everything that had drifted between scripts (audit 2026-10-22):
+"""Shared helpers for the reel-studio scripts — one copy of everything the scripts share:
 numbers, cache paths, LUT lookup, a rotation-aware probe, the voice-activity run, atomic ffmpeg writes, cut-list ranges.
 
 Import:  sys.path.insert(0, os.path.dirname(os.path.abspath(__file__))); from common import N, lut_for, probe, …
@@ -7,6 +7,8 @@ CLI:     common.py N <key>            → prints a number from references/craft/
          common.py lut <file> [--lut X] [--lut-map map.json]   → which LUT a clip gets and why
          common.py probe <file>       → JSON of probe()
 """
+import sys as _sys
+if __name__ == "__main__" and ("-h" in _sys.argv[1:] or "--help" in _sys.argv[1:]): print(__doc__); _sys.exit(0)   # usage, no side effects
 import fnmatch, glob, json, math, os, re, shutil, struct, subprocess, sys
 
 HERE = os.path.dirname(os.path.abspath(__file__)); SKILL = os.path.dirname(HERE)
@@ -22,10 +24,10 @@ FONTS = ("Unbounded.ttf", "Montserrat.ttf", "JetBrainsMono.ttf")
 POCKET4P_LUT = "DJI OSMO Pocket 4P D-Log to Rec.709 V2.0 size33.cube"
 ACTION5PRO_LUT = "DJI OSMO Action 5 Pro D-Log M to Rec.709 V1.cube"
 ACTION4_LUT = "DJI OSMO Action 4 D-Log M to Rec.709 V1.cube"
-# The colour profile a DJI camera writes into its «djmd» metadata track (protobuf; checked on 855 clips, 2026-11-08):
+# The colour profile a DJI camera writes into its «djmd» metadata track (protobuf; checked on 855 clips):
 # proto name → field path of the profile code.
 DJI_COLOR_FIELD = {"dvtm_ac204.proto": "2.4.1",            # Osmo Action 5 Pro
-                   "dvtm_ac203.proto": "2.4.1",            # Osmo Action 4 (AC003). Normal checked 2026-11-09 on 3 clips: field 2.4
+                   "dvtm_ac203.proto": "2.4.1",            # Osmo Action 4 (AC003). Normal checked on 3 clips: field 2.4
                    # is written but empty (code 0); that D-Log M lands in 2.4.1 as on ac204 is a guess — no D-Log M sample yet
                    "dvtm_osmo_pocket_4.proto": "2.2.3.1"}  # Osmo Pocket 4 and 4P
 DJI_COLOR_CODES = {0: "Normal", 2: "D-Log", 9: "HLG", 19: "D-Log-M", 22: "D-Log2"}
@@ -34,22 +36,54 @@ DJI_COLOR_CODES = {0: "Normal", 2: "D-Log", 9: "HLG", 19: "D-Log-M", 22: "D-Log2
 DJI_LOG_LUTS = {("pocket4p", "D-Log"): POCKET4P_LUT, ("pocket4", "D-Log"): POCKET4P_LUT,
                 ("action5pro", "D-Log-M"): ACTION5PRO_LUT, ("action4", "D-Log-M"): ACTION4_LUT}
 
-# platform: videotoolbox decode and Apple Vision exist on macOS only (deps.py lists what else differs per OS)
-HWACCEL = ["-hwaccel", "videotoolbox"] if sys.platform == "darwin" else []
+# platform: hardware decode = the engines.py "decode" choice — videotoolbox (macOS) / cuda (NVIDIA) only when `ffmpeg -hwaccels`
+# lists it, else software ([]); picture models (faces, people, masks …) are chosen per capability in engines.py
+import engines  # noqa: E402  (standard library only at import)
+HWACCEL = engines.hwaccel()
 
-def need_vision(script):
-    """Vision (face / people / person masks) is an Apple framework: stop with a clear message elsewhere."""
-    if sys.platform != "darwin":
-        sys.exit(f"{script} needs Apple Vision (macOS only). On this platform: 16:9 canvas or crop keys by hand; see deps.py")
+def need_vision(script, cap="faces"):
+    """The engine for a picture capability (engines.py), or stop with one line: what is missing and the command that fixes it."""
+    return engines.require(cap, script)
 
-SCREEN_NAME = re.compile(r"запись\s+экрана|screen\s*recording|^rec_\d", re.I)
+# Screen recordings by name: macOS «Запись экрана …» / «Screen Recording …», ingest.py's rec_<stamp>, iOS «RPReplay_Final…».
+# The one pattern for ingest.py, inventory.py and is_camera.
+SCREEN_NAME = re.compile(r"запись\s+экрана|screen\s*recording|^rec_\d|^rpreplay", re.I)
+# File names cameras write themselves (DJI, GoPro, Sony, Canon, phones, Insta360, Panasonic …): a hint when the tags are gone.
+CAMERA_NAME = re.compile(r"^(dji_|dji\d|gopr\d|g[hxl]\d{6}|c\d{4}|mvi_\d|mah\d|img_\d|vid_?\d|pxl_\d|dsc|mov_\d|a\d{3}c\d{3}|p\d{7}|clip\d)", re.I)
+_MAKE_TAGS = ("com.apple.quicktime.make", "com.apple.quicktime.model", "make", "model", "com.android.manufacturer", "com.android.model")
+
+def is_screen_recording(path):
+    """A screen recording: by name (SCREEN_NAME) or because ingest.py put it into assets/screenrec."""
+    if "/assets/screenrec/" in nfc(os.path.abspath(path)).replace(os.sep, "/"): return True
+    return bool(SCREEN_NAME.search(os.path.splitext(nfc(os.path.basename(path)))[0]))
 
 def is_camera(path):
-    """Camera footage = any video that is not a screen recording or an export put into assets/video (DJI, phone, GoPro, Sony
-    alike). A landscape camera clip is cropped to a vertical canvas by the people zones; whether it needs a LUT is lut_for's question."""
-    n = nfc(os.path.basename(path)); low = nfc(os.path.abspath(path)).replace(os.sep, "/")
-    if "/assets/screenrec/" in low or "/assets/video/" in low: return False
-    return not SCREEN_NAME.search(os.path.splitext(n)[0])
+    """Camera footage = any video that is not a screen recording or a video put into assets/video (DJI, phone, GoPro, Sony
+    alike). A landscape camera clip is cropped to a vertical canvas by the people zones; whether it needs a LUT is lut_for's question.
+    What goes into assets/video is decided once, when the material comes in: ingest.py asks camera_evidence()."""
+    low = nfc(os.path.abspath(path)).replace(os.sep, "/")
+    if "/assets/video/" in low: return False
+    return not is_screen_recording(path)
+
+def camera_evidence(path):
+    """Why a video handed over counts as the camera's own file — "djmd" (DJI metadata track), "handler: GoPro AVC",
+    "tags: Apple iPhone 15 Pro", "tags: Android", "file name" — or None: an export (CapCut, Premiere, a re-encode), a download
+    (fetch.py leaves <file>.source.json next to it), a screen recording. None → ingest.py files it as video (assets/video)."""
+    if os.path.exists(path + ".source.json") or is_screen_recording(path): return None
+    r = subprocess.run(["ffprobe", "-v", "error", "-show_entries", "format_tags:stream=codec_tag_string:stream_tags=handler_name", "-of", "json", path],
+                       capture_output=True, text=True)
+    try: j = json.loads(r.stdout or "{}")
+    except json.JSONDecodeError: j = {}
+    st = j.get("streams", []) or []
+    if any(s.get("codec_tag_string") == "djmd" for s in st): return "djmd"
+    hn = next((h for s in st for h in [str((s.get("tags") or {}).get("handler_name", ""))] if h.lower().startswith(("dji", "gopro"))), "")
+    if hn: return f"handler: {hn}"
+    tags = {k.lower(): str(v).strip() for k, v in ((j.get("format") or {}).get("tags") or {}).items()}
+    mk = " ".join(dict.fromkeys(tags[k] for k in _MAKE_TAGS if tags.get(k)))
+    if mk: return f"tags: {mk}"
+    if any(k.startswith("com.android.") for k in tags): return "tags: Android"
+    if CAMERA_NAME.match(nfc(os.path.basename(path))): return "file name"
+    return None
 
 def looks_log(path):
     """DJI clips are often shot in D-Log: a hint for the "no LUT" warning, not a rule (Normal-mode DJI footage needs none)."""
@@ -328,7 +362,7 @@ def in_ranges(t, ranges, tol=0.0):
 
 def proxy_file(public, cid):
     """The proxy of clip `cid` under <public>: footage/ (1080) when it exists, else footage2k/ — a «2K only» intake makes
-    no 1080 proxies, and transcribe.py read silence from the empty footage/ folder (reel-studio reel, 2026-11-05)."""
+    no 1080 proxies, and transcribe.py would read silence from an empty footage/ folder."""
     for folder in ("footage", "footage2k"):
         p = os.path.join(public, folder, f"{cid}.mp4")
         if os.path.exists(p): return p
@@ -419,9 +453,9 @@ def add_guard_args(ap, max_gb):
     ap.add_argument("--no-guard", action="store_true", help="run without the memory guard (do not)")
 
 def guard_reexec(a):
-    """Re-run this very command under mem_guard.py (macOS only; once — MEM_GUARDED=1 marks the inner run). The guard kills the
-    process tree with exit 137 when it passes --max-gb or the Mac has less than --min-free-gb left, and prints the peak."""
-    if a.no_guard or os.environ.get("MEM_GUARDED") or sys.platform != "darwin": return
+    """Re-run this very command under mem_guard.py (macOS and Linux; once — MEM_GUARDED=1 marks the inner run). The guard kills
+    the process tree with exit 137 when it passes --max-gb or the machine has less than --min-free-gb left, and prints the peak."""
+    if a.no_guard or os.environ.get("MEM_GUARDED") or not (sys.platform == "darwin" or sys.platform.startswith("linux")): return
     guard = os.path.join(os.path.dirname(os.path.abspath(__file__)), "mem_guard.py")
     cmd = [sys.executable, "-I", guard, "--max-gb", str(a.max_gb), "--min-free-gb", str(a.min_free_gb), "--",
            sys.executable, "-I", os.path.abspath(sys.argv[0]), *sys.argv[1:]]
@@ -472,7 +506,7 @@ def title_place(mask_json, title=None, canvas=None, zoom=None, kicker=False):
     shoulder edge over the «R» read as «EEL-STUDIO»), and the word does not cross soft or moving mask edges (hair strands,
     hands — the time-averaged alpha is mid-grey there). Bigger and centred wins a tie.
     The old rule «bbox top + 5 %» put a 16:9 title across the ears of a seated speaker: whole letters vanished and the
-    headphones' missing mask showed as a haze over the word (reel_studio_skill hook, 2026-11-06).
+    headphones' missing mask showed as a haze over the word.
     zoom=(scale, cx, cy): the footage is shown scaled around (cx, cy) (0–1; a punch-in) — the word is placed on the frame the
     viewer sees. kicker=True keeps room above the word for the kicker line (it must not leave the top safe zone).
     Without the npz (older mattes) or the title: x 0.5, y a little below the top of the people's box, scale 1, as before."""

@@ -105,6 +105,13 @@ DJI Mic 2 / Mini / 3 on a talking head:
   `audio/sfx/real_shutter_film.wav` (−20 LUFS, level `sfxReal`) + `assets/sfx/real_shutter_film.json` (source, licence) and,
   for CC BY, a credit line in `work/credits.md` for the post description. English queries work best. The camera's own sound
   still comes first (`amb` beats).
+- **Finding a track** (a music bed, a mood reel, a cinematic cut): `python3 -I $S/sfx_find.py <project> "lofi|jazzy piano|ambient guitar" --music --mood "calm warm lo-fi, slow, sea at sunset"`.
+  Several queries split by «|» (genre + instrument + mood words, English), page 1 plus random other pages of each, 60–600 s,
+  CC0 + CC BY (never NC / ND / SA), at most one track per author, every track picked in an earlier project skipped
+  (`~/.cache/reel-studio/used_music.json`), earshot ranks the 10 candidates by `--mood`. Then `--pick K --name X` →
+  `assets/music/X.mp3` + `.json` (licence) + a CC BY credit in `work/credits.md`; `track_beats.py` for the tempo and the cut
+  grid; the bed as in step 4. Change the words from video to video — the same words give a similar pool. Openverse
+  answers some queries with a 500 or «over capacity»: retried once, then that page is skipped, the others still count.
 - **Heard**: after the render, `python3 -I $S/ears.py <project> <render>` → `EARS_DONE` lets earshot listen: every SFX cue
   of the reel that is not heard (masked by the voice or bed, too quiet) or off its frame, tagged events, sections, loudness;
   `work/qa/ears.png` is the annotated sheet (frames, spectrogram, events, loudness, cue markers). ≈ 30 s per minute of

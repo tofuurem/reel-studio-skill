@@ -102,12 +102,12 @@ export const BlocksDemo: React.FC = () => (
     <Sequence name="LowerThird · mask" from={starts[4]} durationInFrames={T_LT}>
       <FakeShot />
       <Name text="LowerThird · mask" />
-      <LowerThird name="Алексей Смирнов" kicker="разработчик · lofiroom" at={6} />
+      <LowerThird name="Алексей Смирнов" kicker="разработчик · инди-игра" at={6} />
     </Sequence>
     <Sequence name="LowerThird · bar" from={starts[5]} durationInFrames={T_LT}>
       <FakeShot />
       <Name text="LowerThird · bar" />
-      <LowerThird variant="bar" name="Алексей Смирнов" kicker="разработчик · lofiroom" at={6} />
+      <LowerThird variant="bar" name="Алексей Смирнов" kicker="разработчик · инди-игра" at={6} />
     </Sequence>
     <Sequence name="BeforeAfter" from={starts[6]} durationInFrames={T_BA}>
       <Name text="BeforeAfter" />

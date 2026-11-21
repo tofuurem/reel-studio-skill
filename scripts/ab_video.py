@@ -43,10 +43,17 @@ def probe(path):
     return {"w": w, "h": h, "fps": num / max(den, 1), "audio": any(s["codec_type"] == "audio" for s in j["streams"]), "dur": float(j["format"].get("duration", 0))}
 
 
+FONT_FALLBACK = ("/System/Library/Fonts/Supplemental/Arial Bold.ttf", "/System/Library/Fonts/Helvetica.ttc",   # macOS
+                 "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", "/usr/share/fonts/dejavu/DejaVuSans-Bold.ttf",   # Debian/Ubuntu, Fedora
+                 "/usr/share/fonts/TTF/DejaVuSans-Bold.ttf", "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf")         # Arch; regular weight
+
+
 def font(px):
-    for f in (os.path.join(FONTS_DIR, "Unbounded.ttf"), "/System/Library/Fonts/Supplemental/Arial Bold.ttf", "/System/Library/Fonts/Helvetica.ttc"):
+    """The template font (setup_env.sh puts it in ~/.cache/reel-studio/fonts) → a system sans → Pillow's own (scalable on Pillow ≥ 10.1)."""
+    for f in (os.path.join(FONTS_DIR, "Unbounded.ttf"), *FONT_FALLBACK):
         if os.path.exists(f): return ImageFont.truetype(f, px)
-    return ImageFont.load_default()
+    try: return ImageFont.load_default(size=px)
+    except TypeError: return ImageFont.load_default()
 
 
 def card(path, W, H, k, name):

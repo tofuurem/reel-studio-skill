@@ -9,7 +9,7 @@ Per voice: loudness, LRA, spread of the speech level over 3-s windows, spectral 
 < 500 = dark / boomy «гудит», > 900 = thin), the 1/3-octave deviation from the target speech shape (voicelib.ltas exact),
 narrow resonances (1/12 octave over the 1-octave trend) with the cuts notch_plan would make, the floor between words.
 Ends with SUGGEST <json> — a draft of work/voice_tune.json (never written by this script) to test with eq_test.py → ab.py.
-Thresholds (a podcast edit ep. 1–2): a resonance ≥ notchMinDb under 500 Hz → notches; LRA > 9 LU or a 3-s spread
+Thresholds: a resonance ≥ notchMinDb under 500 Hz → notches; LRA > 9 LU or a 3-s spread
 p90−p10 > 8 dB → leveler; the quiet frames less than 45 dB under the speech → expander (noise / room between words).
 """
 import argparse, glob, json, os, sys

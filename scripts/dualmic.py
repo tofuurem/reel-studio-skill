@@ -3,9 +3,8 @@
 
 Usage: work/dfvenv/bin/python -I dualmic.py <project> [--cutlist work/cutlist.json] [--pad 2] <camera files…>
        work/dfvenv/bin/python -I dualmic.py <project> --test START DUR <camera file>   → work/voice/test/<id>_{L,R,mix,downmix}.wav
-Why (Halloween vlog, 2026-11-02 … 04): a downmix first mixes both mics' noise and the far mic's late copy of every voice
-(comb filtering, a hollow «из толчка» voice); a mic held at the mouth clips in the transmitter, and the flat tops crackle
-(«колонки хотят спалить»). So, per channel: adeclip around clipped samples only (voicelib.declip_local) → DeepFilterNet limited to
+Why: a downmix first mixes both mics' noise and the far mic's late copy of every voice (comb filtering, a hollow voice);
+a mic held at the mouth clips in the transmitter, and the flat tops crackle. So, per channel: adeclip around clipped samples only (voicelib.declip_local) → DeepFilterNet limited to
 dualmicAtten dB (full strength sounded hollow) → a Dugan-style automix per 10 ms: each channel's gain is its share of the
 smoothed power ^ (dualmicHard / 2), so whoever speaks into their own mic wins. A dead channel (digital silence) is skipped;
 a mono file or two identical channels (one mic on both) go through the same chain once.
@@ -133,8 +132,8 @@ def main():
         rp = os.path.realpath(src)
         if rp in first and first[rp] != target:
             # an alias clip (<id>x<k>: a symlink to the same take, own proxy window) — windows() already covers every range
-            # of the take, so it gets a link to the voice just made instead of a second identical cleaning (Halloween v4:
-            # 90 sources were 51 takes; every alias re-cleaned all windows of its take)
+            # of the take, so it gets a link to the voice just made instead of a second identical cleaning (otherwise
+            # every alias would re-clean all windows of its take)
             if os.path.lexists(target): os.remove(target)
             os.symlink(os.path.basename(first[rp]), target); state[cid] = sig; atomic_json(state, state_p)
             print("link", cid, "→", os.path.basename(first[rp]), flush=True); continue

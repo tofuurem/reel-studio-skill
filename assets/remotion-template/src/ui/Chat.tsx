@@ -4,7 +4,7 @@ import { body } from "../fonts";
 import { colors, alpha, safe, shadows } from "../theme";
 import { inAt, outBefore, sp, steps } from "./anim";
 
-/* Chat pieces (birthday reel ChatGPT thread, lofiroom SideBubble): a real-looking thread whose messages land on the words. */
+/* Chat pieces (a chat thread, SideBubble): a real-looking thread whose messages land on the words. */
 
 /** A strike line that draws across a failed option (instead of a stamped ✕). `p` 0..1. */
 export const Strike: React.FC<{ p: number; color?: string }> = ({ p, color = colors.bad }) => (

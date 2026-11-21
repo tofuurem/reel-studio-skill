@@ -1,5 +1,15 @@
 # From transcript to storyboard (the creative pass)
 
+**0. Style first** (`styles.md`). Before marking anything, offer the user 2–3 styles that fit this material — one line
+each: what the viewer sees and what it needs ("calm — captions, cards, your own cutaways", "comic — 3–4 drawn panels with
+your own lines, plates generated from real frames", "real footage — we show the game itself, someone else's clips with the
+author credited, if you say yes"). The default is calm (and the previous video's style for "same as last time"). Not sure
+which works → build ONE beat (the hook or the key claim, 4–10 s) in each style with a `STYLE` switch in `gen_reel.py`,
+`$S/render_part.sh` per variant, `ab_video.py` → "1 or 2?" — never a full render per style. Save the answer to
+`work/intake.json` `style` and `NOTES.md`. Comic panels never go into a montage the user already approved unless they ask.
+The style decides what the steps below use: in «real footage» proof and cutaways come from real footage first; in
+«comic» the hook and the punchline may become panels (`R.comic_panel`, `assets/examples/gen_reel_comic.example.py`).
+
 Read the transcript segments and mark:
 1. **Hook** (first 3 s): the strongest sentence or picture — a cold open on the payoff, a question bubble (`ChatCard` / `Bubble`) over a muted shot when the user recorded one, or a stamp.
 2. **Chapters** — every topic change gets a `Chapter` ("01 · <topic>": flash on the cut, tag, whoosh). 3–5 chapters for 2–3 minutes.

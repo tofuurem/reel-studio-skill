@@ -8,11 +8,10 @@ Usage: work/venv/bin/python -I track_beats.py <project> <track.mp3> [--start S] 
                    same track in Instagram from the same second — the licence comes with Instagram's library)
 → work/track_beats.json {bpm, period, phase, beats [s], bars [{t, db, kick}], drops [s], start, len, fps, grid {beats, bars,
   phrases, drop}} — actiongen.py reads it (shots measured in beats land exactly on the grid).
-Why (Halloween reel, 2026-11-04): the first beat tracker said 76.86 BPM for a 115.4 BPM track — every «cut on the beat» was
-off. Here: spectral-flux onsets, autocorrelation for the period (70–180 BPM), then period and phase refined together over the
+Why: a naive beat tracker can report 76.86 BPM for a 115.4 BPM track — every «cut on the beat» is then off. Here: spectral-flux onsets, autocorrelation for the period (70–180 BPM), then period and phase refined together over the
 whole track; drops = the bars where the energy and the low end (kick) jump most over the two bars before. Listen to the
 suggested drop before building on it; --drop S overrides it.
-Also (2026-11-09, from video-shotcraft's beat-sync notes): drums split into bands — kick 40–160 Hz, snare 150–500 Hz +
+Also: drums split into bands — kick 40–160 Hz, snare 150–500 Hz +
 1–3 kHz, hats 6–14 kHz; every bar carries its hat density (busy hats = room for small moves, sparse = hold still); the
 strongest kick / snare transients become grid "hits" (frames) — pin accents (a flash, a crash) to a real hit, not a grid
 point; and a tempo check: when as many strong hits fall between the beats as on them, the tempo is probably half (or the

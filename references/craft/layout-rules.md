@@ -14,7 +14,7 @@ A corner HUD (timer, step, progress) sits top-left at `wideMargin`; check it aga
 - Right 90 px: like/comment buttons. Keep cards at `left/right: 64` but nothing essential in the right 90 px at the bottom half.
 
 ## People-aware crop (`work/people_zones.json`, before the proxies)
-- A 16:9 camera clip on a 9:16 canvas keeps 0.316 of its width. `people_zones.py` decides where, per segment, from Apple Vision boxes on the source: the main person plus the big ones next to them that fit (`N.peopleFitMargin`, `N.peopleNearArea`); the main person is sticky (`N.peopleStickyArea`) so two people who do not fit together do not trade the crop; when the main person alone is wider than the crop, their face decides.
+- A 16:9 camera clip on a 9:16 canvas keeps 0.316 of its width. `people_zones.py` decides where, per segment, from people boxes (engines.py: Apple Vision on macOS, RT-DETR elsewhere) on the source: the main person plus the big ones next to them that fit (`N.peopleFitMargin`, `N.peopleNearArea`); the main person is sticky (`N.peopleStickyArea`) so two people who do not fit together do not trade the crop; when the main person alone is wider than the crop, their face decides.
 - A subject that moves less than `N.peoplePanMin` of the width gets one fixed centre; a moving one a smoothed pan (`N.peopleSmoothSec`, at most `N.peoplePanSpeed` widths per second, a key every `N.peopleKeyEvery` s). make_proxies writes it as one ffmpeg crop expression per proxy.
 - Vision does not see costumes as people, finds nobody in the dark, and «biggest» is not always «the action» (a seated man in front of the one waving): read the sheet, set `cropX` for those ranges.
 - Only cut lists made here (plan.json, silent): a CapCut draft keeps the framing the user set in CapCut.

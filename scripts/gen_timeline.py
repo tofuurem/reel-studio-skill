@@ -19,7 +19,7 @@ Usage: gen_timeline.py [--cutlist work/cutlist.json] [--out reel/src/Timeline.ts
   (ui/Seam.tsx). "match" and "bodywipe" need work/seams.json from seams.py (run it after this script, then run this again);
   without it they fall back to a dissolve / a plain wipe. Each seam sets its own overlap (push / cut 1 frame, wipe
   seamWipeFrames, bodywipe the person's crossing).
-- The seam budget (the user, 2026-11-09: «вжух на каждое действие» is a terrible video): most cuts stay plain; WARNINGs when
+- The seam budget (an effect on every action makes a bad video): most cuts stay plain; WARNINGs when
   effect seams exceed seamFxPerMin, come closer than seamFxGapCuts plain cuts, repeat a kind within seamRepeatSec, use more
   than transitionKindsMax kinds, or a leak appears more than once.
 """
@@ -110,7 +110,7 @@ for i, s in enumerate(merged):
     drift = 0 if KEEP_FRAMING else N["punchDrift"]
     if KEEP_FRAMING: props.append("drift={0}")   # a draft keeps the user's framing: no slow push-in either
     if s.get("drift") is not None:   # a plan range may set its own push-in: 0 for a framed composite (a window baked into the
-        drift = float(s["drift"]); props.append(f"drift={{{drift}}}")   # picture must not grow — «Покупать байк» 2026-11-10)
+        drift = float(s["drift"]); props.append(f"drift={{{drift}}}")   # picture must not grow)
     if s.get("speed", 1) != 1: props.append(f'playbackRate={{{s["speed"]}}}')
     if s["volume"] < 0.01: props.append("volume={0}")
     elif s.get("muteRanges"):

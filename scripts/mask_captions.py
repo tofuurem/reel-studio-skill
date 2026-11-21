@@ -1,4 +1,6 @@
 """Replace profanity (matcher in swear.py, shared with cut_from_transcript.py) in a Caption[] JSON with first letter + asterisks (timing untouched). Usage: mask_captions.py [captions.json]"""
+import sys as _sys
+if __name__ == "__main__" and ("-h" in _sys.argv[1:] or "--help" in _sys.argv[1:]): print(__doc__); _sys.exit(0)   # usage, no side effects
 import json, os, re, sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__))); from swear import is_swear
 caps_path = sys.argv[1] if len(sys.argv) > 1 else "reel/public/captions/timeline.json"

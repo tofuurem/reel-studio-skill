@@ -16,6 +16,7 @@
 #   level  — the final integrated loudness must be within numbers.json lufsTolerance of the target (one corrective pass first);
 #   glitch — glitch_scan.py: exit 2 (broken/truncated) fails the render, exit 1 (dropouts) is a WARNING to look at;
 #   sound  — audio_qa.py: loudness range, true peak, digital silence, spectrum, clicks on the dialogue cuts (warnings only).
+[[ "${1:-}" == "-h" || "${1:-}" == "--help" ]] && { awk 'NR>1 && /^#/ {sub(/^# ?/, ""); print; next} NR>1 {exit}' "$0"; exit 0; }
 set -e
 SCRIPTS=$(cd "$(dirname "$0")" && pwd)
 P=$(cd "${1:?project}" && pwd); COMP=${2:?Reel|Reel2K|Action2K}; OUT=${3:?out.mp4}
@@ -33,9 +34,9 @@ if [ "${REUSE_RAW:-0}" = 1 ] && [ -s "$RAW" ]; then echo "REUSE_RAW=1: mastering
 # caffeinate (macOS) / systemd-inhibit (Linux): a sleeping display stalls headless Chrome (see references/pitfalls/render-and-qa.md)
 mkdir -p "$P/work/tmp"; export TMPDIR="$P/work/tmp"   # the bundle lives in the project: nothing else can sweep it away mid-render
 KEEP=(); if command -v caffeinate >/dev/null; then KEEP=(caffeinate -dis); elif command -v systemd-inhibit >/dev/null; then KEEP=(systemd-inhibit --what=sleep:idle --why=render); fi
-# memory guard (macOS): Remotion + Chrome + the video decoders can grow to many GB on a long 2K timeline; the guard kills the render
+# memory guard (macOS, Linux): Remotion + Chrome + the video decoders can grow to many GB on a long 2K timeline; the guard kills the render
 # (exit 137) at MAX_GB (default 12) of footprint or when the Mac has less than MIN_FREE_GB (default 4) left — instead of a frozen Mac
-GUARD=(); [ "$(uname)" = Darwin ] && GUARD=(python3 -I "$SCRIPTS/mem_guard.py" --max-gb "${MAX_GB:-12}" --min-free-gb "${MIN_FREE_GB:-4}" --)
+GUARD=(); case "$(uname)" in Darwin|Linux) GUARD=(python3 -I "$SCRIPTS/mem_guard.py" --max-gb "${MAX_GB:-12}" --min-free-gb "${MIN_FREE_GB:-4}" --);; esac
 "${GUARD[@]}" $KEEP npx remotion render "$COMP" "$RAW" --codec=h264 --crf=17 --audio-codec=pcm-16 --concurrency=${CONC:-1} > "$LOG" 2>&1 || { rc=$?; [ $rc = 137 ] && echo "RENDER STOPPED BY THE MEMORY GUARD (MAX_GB=${MAX_GB:-12}, MIN_FREE_GB=${MIN_FREE_GB:-4}): close other apps or raise MAX_GB; the raw file is incomplete"; echo "RENDER FAILED (remotion exit $rc) — last lines of $LOG:"; tail -30 "$LOG"; exit 1; }
 grep MEM_GUARD "$LOG" | tail -1 || true
 fi

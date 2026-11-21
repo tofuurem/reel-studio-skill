@@ -13,8 +13,7 @@ export const colors = palette;
  *  with what the user named for this video (intake), never a guess. */
 export const brand = { channel: "", series: "" };
 
-/** One shadow per kind of element, nothing else (birthday reel: «тени и границы странные» was a mix of heavy shadows and
- *  glows). No glows, no tilt on landing pills, no emoji in UI text. */
+/** One shadow per kind of element, nothing else (a mix of heavy shadows and glows reads as odd borders). No glows, no tilt on landing pills, no emoji in UI text. */
 export const shadows = {
   text: "0 2px 10px rgba(0,0,0,0.6)", // text straight over footage
   caption: "0 2px 0 rgba(0,0,0,0.5), 0 0 16px rgba(0,0,0,0.6), 0 8px 28px rgba(0,0,0,0.5)", // subtitles over any footage
@@ -23,9 +22,10 @@ export const shadows = {
   cover: "0 24px 60px rgba(0,0,0,0.4)", // plates on covers (stills only)
 };
 
-/** Comic lettering (scenes/Comic.tsx; Halloween v5, 2026-11-09: «банан — комиксный герой»): flat yellow fill, a thick ink
- *  outline, a hard red offset (no blur — flat ink, not a glow), a paper burst with halftone dots. */
-export const comic = { fill: "#FFE14D", ink: "#141210", pop: "#E8352B", paper: "#FFF7DC", dot: "rgba(232,53,43,0.28)", tag: "#FFFFFF" };
+/** Comic lettering (scenes/Comic.tsx): flat yellow fill, a thick ink
+ *  outline, a hard red offset (no blur — flat ink, not a glow), a paper burst with halftone dots. cyan / magenta are the
+ *  print misregistration of the Spider-Verse panels and covers (scenes/ComicPanel.tsx, styles.md «comic»). */
+export const comic = { fill: "#FFE14D", ink: "#141210", pop: "#E8352B", paper: "#FFF7DC", dot: "rgba(232,53,43,0.28)", tag: "#FFFFFF", cyan: "#19E3FF", magenta: "#FF2E8B" };
 
 /** Safe area of the 9:16 canvas (Instagram chrome): nothing important above top / below bottom / in the right strip. */
 export const safe = { top: N.safeTop, bottom: N.safeBottom, right: N.safeRight, x: N.safeX };

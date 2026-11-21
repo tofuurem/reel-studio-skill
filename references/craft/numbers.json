@@ -326,7 +326,7 @@
      "key": "sfxVariants",
      "value": 3,
      "what": "variants made of every whoosh / pop / hit (whoosh, whoosh2, whoosh3 …); reelgen.sfx cycles them",
-     "why": "«одинаковый вжух на каждый переход — странно» — the same sample twice in a row reads as a template",
+     "why": "the same sample twice in a row reads as a template",
      "used": "make_sfx.sh, reelgen.sfx()"
     }
    ]
@@ -487,7 +487,7 @@
     {
      "key": "peopleMinConf",
      "value": 0.3,
-     "what": "lowest Vision confidence for a person box",
+     "what": "lowest confidence for a person box (set on Vision; recalibrate for another people engine)",
      "why": "lower picks up posters and dark shapes",
      "used": "people_zones.py"
     },
@@ -549,7 +549,7 @@
      "key": "snapBack",
      "value": 6.0,
      "what": "a range that starts inside a sentence grows back to its start, at most this many seconds",
-     "why": "«фразы обрезанные посередине» — a line that starts mid-thought reads as a mistake",
+     "why": "a line that starts or ends mid-thought reads as a mistake",
      "used": "cut_from_transcript.py"
     },
     {
@@ -582,7 +582,7 @@
      "key": "dualmicAtten",
      "value": 12,
      "what": "DeepFilterNet noise reduction limit per lav channel (dB)",
-     "why": "full strength left a hollow «из толчка» voice (A/B by ear)",
+     "why": "full strength leaves a hollow voice (A/B by ear)",
      "used": "dualmic.py"
     },
     {
@@ -603,7 +603,7 @@
      "key": "voiceMaxGain",
      "value": 9.0,
      "what": "most a quiet clip is lifted (dB)",
-     "why": "+18 dB lifted mic hiss and DeepFilterNet artefacts into «a speaker about to blow»",
+     "why": "+18 dB lifts mic hiss and DeepFilterNet artefacts into a speaker-about-to-blow sound",
      "used": "dialogue.py"
     },
     {
@@ -638,7 +638,7 @@
      "key": "ambRealtimeSpeed",
      "value": 1.5,
      "what": "a picture beat sped up this much or more plays its camera sound in real time, not time-stretched",
-     "why": "rides at ×12–×15 played their wind time-stretched — a grinding texture the user heard as a broken frame",
+     "why": "rides at ×12–×15 with their wind time-stretched sound like a grinding texture, a broken file",
      "used": "dialogue.py"
     },
     {
@@ -680,7 +680,7 @@
      "key": "dfnMaxAtten",
      "value": 18,
      "what": "largest DeepFilterNet limit (dB)",
-     "why": "more than ≈ 18 dB pumps the noise between words and hollows the voice («из толчка», «underwater»)",
+     "why": "more than ≈ 18 dB pumps the noise between words and hollows the voice («underwater»)",
      "used": "voice_clean.py"
     },
     {
@@ -729,7 +729,7 @@
      "key": "eqMaxBoost",
      "value": 4.0,
      "what": "largest presence boost at 3.5 kHz (dB)",
-     "why": "the DJI lav under clothing sat ~20 dB down at 2–5 kHz vs its 400–500 Hz peak: dull, «muffled»",
+     "why": "a lav under clothing sits ~20 dB down at 2–5 kHz vs its 400–500 Hz peak: dull, «muffled»",
      "used": "voicelib.py"
     },
     {
@@ -841,7 +841,7 @@
      "key": "expBelowDb",
      "value": 22.0,
      "what": "optional expander (work/voice_tune.json «expander»): frames this far under the speech level are pulled down (dB)",
-     "why": "on a podcast, room tails after words were the «эхо» the user heard; OFF unless the project asks",
+     "why": "room tails after words are heard as echo; OFF unless the project asks",
      "used": "voicelib.py"
     },
     {
@@ -869,7 +869,7 @@
      "key": "notchMaxCut",
      "value": 4.5,
      "what": "deepest automatic notch (dB, Q 3)",
-     "why": "ep. 1's approved host EQ: −4.5 at 108 Hz",
+     "why": "a typical approved voice notch: −4.5 at 108 Hz",
      "used": "voicelib.py (notch_plan), voice_probe.py"
     },
     {
@@ -923,7 +923,7 @@
      "key": "actionPhraseBars",
      "value": 4,
      "what": "bars per musical phrase on the reel grid (whips and big moments go on phrase starts)",
-     "why": "Cudi «Pursuit Of Happiness (Nightmare)»: sections every 4 bars from the drop (frames 218/468/718/967/1217)",
+     "why": "pop and hip-hop tracks change sections every 4 bars from the drop",
      "used": "track_beats.py, actiongen.py"
     }
    ]
@@ -982,7 +982,7 @@
      "key": "seamFxPerMin",
      "value": 3,
      "what": "effect seams (anything but a dissolve / hard cut) per minute of a calm reel, at most",
-     "why": "the user: «вжух на каждое действие» makes a terrible video — most cuts stay plain",
+     "why": "an effect on every action makes a bad video — most cuts stay plain",
      "used": "gen_timeline.py budget check, transitions.md"
     },
     {
@@ -1080,7 +1080,7 @@
      "key": "seamLeakPeak",
      "value": 0.5,
      "what": "leak seam: peak opacity of the warm gradients",
-     "why": "the user: no super-bright transitions — @remotion/effects lightLeak fills the frame solid yellow at its peak, not used",
+     "why": "no super-bright transitions — @remotion/effects lightLeak fills the frame solid yellow at its peak, not used",
      "used": "Clip.tsx"
     },
     {
@@ -1215,6 +1215,74 @@
      "what": "J-cut: seconds the incoming scene's own sound starts before its picture",
      "why": "",
      "used": "dialogue.py"
+    }
+   ]
+  },
+  {
+   "title": "Styles (styles.md): comic panels, credits",
+   "rows": [
+    {
+     "key": "comicPanelsPerMin",
+     "value": 4,
+     "what": "comic panels per minute when «comic» is the reel's style (as an accent in another style: 1–2 per reel)",
+     "why": "a panel on every sentence turns the reel into a slideshow of pictures; the speaker must stay the reel",
+     "used": "reelgen.py STYLE BUDGET, styles.md"
+    },
+    {
+     "key": "comicPanelMinFrames",
+     "value": 45,
+     "what": "shortest comic panel (frames)",
+     "why": "a balloon of 3–6 words needs ≈ 1.5 s to be read",
+     "used": "reelgen.py R.comic_panel"
+    },
+    {
+     "key": "comicPanelMinH",
+     "value": 240,
+     "what": "smallest inset comic panel height (px); a free band lower than this + comicShadow squeezes the panel",
+     "why": "a lower panel cannot hold a readable picture and balloon — use full=True or another moment",
+     "used": "ComicPanel.tsx, reelgen.py R.comic_panel"
+    },
+    {
+     "key": "comicPanelMaxFrames",
+     "value": 150,
+     "what": "longest comic panel (frames)",
+     "why": "a still drawing over 5 s reads as a frozen video; longer beats get two panels or real footage",
+     "used": "reelgen.py R.comic_panel"
+    },
+    {
+     "key": "comicPanelIn",
+     "value": 8,
+     "what": "panel pop-in (frames): scale 0.86 → 1.03 → 1 with the cyan / magenta frames converging",
+     "why": "a panel lands like a page slapped down, not a slow fade",
+     "used": "scenes/ComicPanel.tsx"
+    },
+    {
+     "key": "comicPanelOut",
+     "value": 6,
+     "what": "panel exit (frames)",
+     "why": "exits are faster than entrances (motion-design.md)",
+     "used": "scenes/ComicPanel.tsx"
+    },
+    {
+     "key": "comicBorder",
+     "value": 10,
+     "what": "ink frame of a comic panel (px)",
+     "why": "thinner reads as a photo frame, thicker eats the picture at 1080 wide",
+     "used": "scenes/ComicPanel.tsx"
+    },
+    {
+     "key": "comicShadow",
+     "value": 14,
+     "what": "hard offset shadow of a panel and a balloon (px, flat ink, no blur)",
+     "why": "the print look of the covers; a soft shadow makes it a UI card again",
+     "used": "scenes/ComicPanel.tsx"
+    },
+    {
+     "key": "creditFontPx",
+     "value": 28,
+     "what": "author credit on someone else's footage (px)",
+     "why": "readable on a phone (minTextPx) yet quieter than the captions",
+     "used": "scenes/Cards.tsx, scenes/BRoll.tsx (credit)"
     }
    ]
   }

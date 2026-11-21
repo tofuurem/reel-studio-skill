@@ -2,8 +2,8 @@
 """Lift the shadows of dark (night) proxies in place, after make_proxies.py: an ffmpeg curve on the picture, sound copied.
 
 Usage: work/venv/bin/python -I night_lift.py <project> [--dry-run]       (any python with numpy: work/venv/bin/python)
-Why (Halloween vlog, 2026-11-03): night street and bar clips came out of the D-Log LUT almost black on a phone — faces
-lost in the mud, while the day clips were fine. A global grade would wash out the day; a per-clip curve by brightness does not.
+Why: night street and bar clips come out of a log LUT almost black on a phone — faces lost in the mud, while the day
+clips are fine. A global grade would wash out the day; a per-clip curve by brightness does not.
 Per clip: duration-weighted mean luma of its segments (3 frames each from the 1080 proxy, 0–255) picks a curve — below
 nightStrong «strong», below nightMedium «medium», below nightMild «mild», else untouched. Both footage/ and footage2k/ are
 graded the same; each graded proxy carries comment=night_lift:<level>, so a re-run skips it and measures nothing twice (a

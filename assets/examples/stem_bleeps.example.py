@@ -2,8 +2,8 @@
 
 Usage: python3 -I work/scripts/stem_bleeps.py
 Before: work/gigvenv/bin/python -I $S/transcribe.py --sources work/audit/stemu.wav   → work/new/cstemu.json (words on the timeline)
-Why the stem and not the source clips: a source clip carries the far mic and background voices (v4 bleeped «Сейчас нет, ему
-больно»); the stem is only what the viewer hears. GigaAM word ends are ±0.1–0.26 s (40 ms token grid), so each bleep spans
+Why the stem and not the source clips: a source clip carries the far mic and background voices (innocent lines get
+bleeped); the stem is only what the viewer hears. GigaAM word ends are ±0.1–0.26 s (40 ms token grid), so each bleep spans
 the word −0.2 / +0.28 s, at least 0.38 s; neighbours closer than 0.15 s merge (one long bleep over three words reads as a
 broken track). Hand decisions live in work/bleep_patches.json: {"add": [[t, "word"], …], "drop": [t, …]} (seconds ±0.5).
 Listen to every bleep once: GigaAM can miss a swear said over wind or music; an `add` fixes that by time.
@@ -12,7 +12,8 @@ import json, os, sys
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")); os.chdir(ROOT)
 sys.path.insert(0, os.path.expanduser("~/.claude/skills/reel-studio/scripts"))
 from swear import is_swear
-from censor_bleeps import is_extra
+from censor_bleeps import is_extra, load_extra
+load_extra()   # the project's work/censor_words.txt, if any
 FPS = 30
 words = [w for s in json.load(open("work/new/cstemu.json"))["segments"] for w in s["words"]]
 patch = json.load(open("work/bleep_patches.json")) if os.path.exists("work/bleep_patches.json") else {"add": [], "drop": []}

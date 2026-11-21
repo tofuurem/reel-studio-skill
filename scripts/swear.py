@@ -2,8 +2,10 @@
 """The one profanity matcher (used by cut_from_transcript.py, bleeps_from_timeline.py, make_captions.py, mask_captions.py,
 doctor.py). Run it to self-test: python3 -I swear.py → prints FAIL lines if a known word is missed or an innocent word is caught.
 The root list is matched at the start of the word after an optional prefix, so short prefixes ("с", "у", "о") glue onto
-innocent roots: «себестоимость» = с + ебе… once merged with the next swear into a 1.55 s bleep (audit 2026-10-22).
+innocent roots: «себестоимость» = с + ебе… once merged with the next swear into a 1.55 s bleep.
 INNOCENT_PREFIX lists word starts that are never swears; INNOCENT whole words."""
+import sys as _sys
+if __name__ == "__main__" and ("-h" in _sys.argv[1:] or "--help" in _sys.argv[1:]): print(__doc__); _sys.exit(0)   # usage, no side effects
 import re
 SWEAR = re.compile(r"^[^а-яё]*(ни|нах|на|про|за|по|до|от|у|съ|въ|подъ|объ|разъ|отъ|с|вы|об|при|и|о|рас|раз|под|пере)?(бля|бляд|хуй|хуё|хуе|хуя|хуи|пизд|ёпт|епт|еба|ебу|ебё|ебе|ебы|ебл|ёб|заеб|наеб|охуе|охуи)", re.I)
 INNOCENT = {"хуже"}

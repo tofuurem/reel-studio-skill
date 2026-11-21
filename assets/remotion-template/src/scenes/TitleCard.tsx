@@ -6,7 +6,7 @@ import { colors, safe, shadows } from "../theme";
 import { inAt, outBefore } from "../ui/anim";
 
 /**
- * Episode title in the top band (lofiroom ep1/ep2 «LofiTitle», made parametric): the series name slams in on a light plate,
+ * Episode title in the top band: the series name slams in on a light plate,
  * the episode pill slides in under it (`pillAt`), one quiet line under that (`subAt`). Lands flat — `tilt` only if a design
  * asks for it. Keep it ≤ 3 s and under the cold-open window or over a board.
  */

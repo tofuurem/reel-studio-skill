@@ -8,16 +8,16 @@ Usage: python3 -I inventory.py <project> <files|dirs>… [--lut <cube>] [--lut-m
   <project>/work/<name>/screen.jpg    three frames per screen recording / other video (one row each)
   <project>/work/<name>/images.jpg    thumbnails of the images (6 per row)
   More than 36 tiles → camera_1.jpg, camera_2.jpg … (36 per sheet; one giant sheet is unreadable).
-Kinds follow ingest.py (camera = any video that is not a screen recording or in assets/video, screen = «Запись экрана»/Screen Recording/rec_*, video, audio, image). The LUT goes on
+Kinds follow ingest.py (camera = any video that is not a screen recording or in assets/video, screen = common.SCREEN_NAME — «Запись экрана» / Screen Recording / rec_* / RPReplay — or in assets/screenrec, video, audio, image). The LUT goes on
 camera clips only, per clip (common.lut_for: --lut-map, the DJI colour profile in the file, --lut; otherwise none), and on every HDR video (HLG / PQ: iPhone «HDR»,
 a camera in HLG mode) as the HDR → Rec.709 LUT — the sheets show what the proxies will look like. "silent" =
 no audio stream or mean level under −70 dB over the first 2 min: do not transcribe those (a recognizer invents «Продолжение
 следует…» on silence). ffmpeg here has no drawtext, so tiles carry no labels — a frame that cannot be grabbed becomes a grey
 tile, so the tile order always equals the table order. AppleDouble `._*` files are skipped.
 """
-import argparse, json, os, subprocess, sys, unicodedata, datetime
+import argparse, json, os, shlex, subprocess, sys, unicodedata, datetime
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from common import is_camera, load_lut_map, looks_log, lut_for, nfc, probe
+from common import is_camera, is_screen_recording, load_lut_map, looks_log, lut_for, nfc, probe
 
 ap = argparse.ArgumentParser(); ap.add_argument("project"); ap.add_argument("paths", nargs="+"); ap.add_argument("--lut"); ap.add_argument("--lut-map"); ap.add_argument("--name", default="inventory")
 a = ap.parse_args()
@@ -35,8 +35,8 @@ def files(paths):
                 if not f.startswith("."): yield os.path.abspath(os.path.join(root, f))
 
 def kind(f):
-    n = nfc(os.path.basename(f)); stem, ext = os.path.splitext(n); ext = ext.lower(); low = stem.lower()
-    if ext in VIDEO: return "screen" if ("запись экрана" in low or "screen recording" in low or low.startswith("rec_")) else "camera" if is_camera(f) else "video"
+    ext = os.path.splitext(nfc(os.path.basename(f)))[1].lower()
+    if ext in VIDEO: return "screen" if is_screen_recording(f) else "camera" if is_camera(f) else "video"
     return "image" if ext in IMAGE else "audio" if ext in AUDIO else None
 
 def level(f):
@@ -109,7 +109,8 @@ for i, r in enumerate(rows, 1):
     L.append(f"| {i} | {r['kind']} | {unicodedata.normalize('NFC', os.path.basename(r['file']))} | {r.get('dur', 0):.1f}s | {r.get('w') or ''}×{r.get('h') or ''} | {fps} | {r.get('camera') or ''} | {r['mb']} | {lvl(r['level'])} | {'yes' if r['silent'] else ''} | {r['lut'] or ''} | {r['shot']} | {note(r)} |")
 talk = [r["file"] for r in rows if r["kind"] in ("camera", "screen", "video", "audio") and not r["silent"]]
 L += ["", "Sheets: " + (", ".join(made) or "none") + " (tiles in table order within each kind; grey = frame could not be read).", "",
-      "Next: transcribe only the files with sound —", "", "```", "cd " + P, "work/gigvenv/bin/python -I $S/transcribe_gigaam.py \\", *[f"  '{t}' \\" for t in talk], "```"]
+      "Next: transcribe only the files with sound —", "", "```", "cd " + shlex.quote(P), "work/gigvenv/bin/python -I $S/transcribe_gigaam.py" + (" \\" if talk else ""),
+      *[f"  {shlex.quote(t)}" + (" \\" if k < len(talk) - 1 else "") for k, t in enumerate(talk)], "```"]
 open(os.path.join(OUT, "inventory.md"), "w").write("\n".join(L) + "\n")
 json.dump(rows, open(os.path.join(OUT, "inventory.json"), "w"), ensure_ascii=False, indent=1)
 print("\n".join(L[:len(rows) + 6])); print("INVENTORY_DONE", OUT)

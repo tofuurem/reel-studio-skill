@@ -6,19 +6,21 @@ Run after gen_timeline.py (it needs work/timeline_zoom.json and the proxies), th
 
 - "match" (a match cut on the person): the face in the last frame of the outgoing clip and in the first frame of the
   incoming one (macOS Vision), both mapped to the canvas the way Clip.tsx places them (face_zones.to_canvas: fit, CapCut
-  framing, punch + drift). The incoming clip then starts moved and zoomed so its head lands where the previous head was
+  framing, punch + drift; faces: engines.py, --engine). The incoming clip then starts moved and zoomed so its head lands where the previous head was
   and eases to its own framing over seamMatchFrames. The zoom also has to keep the canvas covered after the move; beyond
   seamMatchMaxScale the cut stays a dissolve (WARNING) — pick another moment or another take.
 - "bodywipe" (someone walks across the outgoing shot): the outgoing clip keeps playing over the cut while the passing
   person's trailing edge reveals the next shot behind them. The person is the biggest box that moves sideways in the 2.5 s
-  after the cut (Vision human rectangles at the full frame rate); the path is their trailing edge in canvas px per frame
+  after the cut (engines.py people boxes at the full frame rate, --people-engine); the path is their trailing edge in canvas px per frame
   until they leave the frame. Put the cut on the frame they ENTER the shot (a WARNING says when they start mid-frame).
-Linux (no Vision): nothing is measured; the cuts fall back to a dissolve / a plain wipe.
+No faces / people engine that runs here (engines.py prints which and how to install it): that kind of cut falls back to a
+dissolve / a plain wipe.
 Prints SEAMS_DONE.
 """
 import argparse, json, os, subprocess, sys, tempfile
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from common import N, atomic_json, load_json, proxy_file
+import engines
 import face_zones as fz
 
 
@@ -62,7 +64,7 @@ def bodywipe(p, public, fps, tmp):
     # one sample per TIMELINE frame: a sped-up clip shows sp source seconds per second
     subprocess.run(["ffmpeg", "-v", "error", "-nostdin", "-y", "-ss", f"{t0:.3f}", "-t", f"{2.5 * sp:.3f}", "-i", pp, "-an", "-vf", f"fps={fps / sp:.4f},scale=640:-2",
                     os.path.join(tmp, "w%04d.jpg")], check=True)
-    frames = [pz.vision(os.path.join(tmp, n))[0] for n in sorted(x for x in os.listdir(tmp) if x.startswith("w") and x.endswith(".jpg"))]
+    frames = [pz.detect(os.path.join(tmp, n), faces=False)[0] for n in sorted(x for x in os.listdir(tmp) if x.startswith("w") and x.endswith(".jpg"))]
     big = [[b for b in people if b["h"] >= 0.35] for people in frames]
     if not any(big): return None, "nobody big enough crosses the shot in the 2.5 s after the cut"
     # follow the box nearest to the previous one, starting from the first frame anyone is there
@@ -88,6 +90,8 @@ def bodywipe(p, public, fps, tmp):
 
 def main():
     ap = argparse.ArgumentParser(); ap.add_argument("project"); ap.add_argument("--cutlist", default="work/cutlist.json"); ap.add_argument("--public", default="reel/public")
+    ap.add_argument("--engine", choices=engines.ENGINES["faces"], help="faces engine for match cuts (default: engines.py choice)")
+    ap.add_argument("--people-engine", choices=engines.ENGINES["people"], help="people engine for body wipes (default: engines.py choice)")
     a = ap.parse_args(); os.chdir(os.path.abspath(a.project))
     cl = load_json(a.cutlist); zoom = load_json(os.path.join(os.path.dirname(a.cutlist) or ".", "timeline_zoom.json"), {})
     if not cl or not zoom: sys.exit("run gen_timeline.py first (work/cutlist.json, work/timeline_zoom.json)")
@@ -95,8 +99,16 @@ def main():
     rows = zoom["segments"]; by_from = {str(s["fromFrame"]): s for s in cl["main"]}
     want = [(i, by_from.get(str(r["fromFrame"]), {}).get("transition")) for i, r in enumerate(rows) if i > 0]
     want = [(i, k) for i, k in want if k in ("match", "bodywipe")]
-    if sys.platform != "darwin":
-        print("no macOS Vision: match / bodywipe cuts stay a dissolve / a plain wipe"); atomic_json({"cuts": {}}, "work/seams.json"); print("SEAMS_DONE work/seams.json"); return
+    runs = {}
+    for k, cap, flag in (("match", "faces", a.engine), ("bodywipe", "people", a.people_engine)):
+        if not any(kk == k for _, kk in want): continue
+        name = engines.choose(cap, flag); miss = engines.missing(cap, name); runs[k] = not miss
+        if miss: print(f"WARNING: {cap} engine {name} cannot run here ({miss}; {engines.FIX.get(name, '')}) — {k} cuts stay a {'dissolve' if k == 'match' else 'plain wipe'}")
+        elif k == "match": fz.ENGINE[:] = [name]
+        else:
+            import people_zones as pz
+            pz.ENGINES[:] = [name, engines.choose("faces")]   # the wipe reads people only (detect(faces=False))
+    want = [(i, k) for i, k in want if runs.get(k)]
     out = {}
     for i, k in want:
         p, q = rows[i - 1], rows[i]

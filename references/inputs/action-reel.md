@@ -12,7 +12,7 @@ from the camera files by `scripts/actiongen.py`, the template's `Action.tsx` pla
   end); whips are silent and rare — phrase starts only. No sound on every cut: `craft/transitions.md` §0.
 - Up to 45 s; vertical 9:16 for Instagram (16:9 only when asked: `R = ag.Project(".", canvas="16:9")`).
 - Censored: no swearing in the punchlines or captions, nothing illegal on screen.
-- Frame the people, not the centre: every landscape shot is cropped by Apple Vision (people_zones); check the sheet.
+- Frame the people, not the centre: every landscape shot is cropped by the people boxes (people_zones); check the sheet.
 
 ## Steps
 1. **Material map.** Transcripts (`transcribe_gigaam.py`, Russian; another language: `transcribe.py --sources --lang <code>` —

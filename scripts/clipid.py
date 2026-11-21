@@ -9,6 +9,8 @@ with a clear message when two inputs collide (copy/rename one of the files, e.g.
 CLI: clipid.py <path> [more paths]  → prints ids (used by voice_isolate.sh)
      clipid.py --stem <path>…        → prints the ASCII file stem (vo_carriers.sh names its carriers with it)
 """
+import sys as _sys
+if __name__ == "__main__" and ("-h" in _sys.argv[1:] or "--help" in _sys.argv[1:]): print(__doc__); _sys.exit(0)   # usage, no side effects
 import os, re, sys, unicodedata
 
 TR = dict(zip("абвгдеёжзийклмнопрстуфхцчшщъыьэюя", ["a", "b", "v", "g", "d", "e", "e", "zh", "z", "i", "y", "k", "l", "m", "n", "o", "p", "r", "s", "t", "u", "f", "h", "ts", "ch", "sh", "sch", "", "y", "", "e", "yu", "ya"]))

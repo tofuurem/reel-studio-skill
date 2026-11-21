@@ -38,8 +38,8 @@ LETTER = re.compile(r"[^\W\d_]")
 
 
 def reexec_guarded(args: argparse.Namespace) -> None:
-    """Re-run this script under mem_guard.py (macOS only, once)."""
-    if args.no_guard or os.environ.get("MEM_GUARDED") or sys.platform != "darwin":
+    """Re-run this script under mem_guard.py (macOS and Linux, once)."""
+    if args.no_guard or os.environ.get("MEM_GUARDED") or not (sys.platform == "darwin" or sys.platform.startswith("linux")):
         return
     guard = Path(__file__).with_name("mem_guard.py")
     env = {**os.environ, "MEM_GUARDED": "1"}
@@ -152,7 +152,7 @@ def main() -> None:
     reexec_guarded(args)
     OUT.mkdir(parents=True, exist_ok=True)
     import onnx_asr   # here, so --help works without the venv
-    # CPU only: CoreMLExecutionProvider fails on this model's dynamic shapes; CPU runs ≈ 20x realtime on an M4 Pro
+    # CPU only: CoreMLExecutionProvider fails on this model's dynamic shapes; CPU runs ≈ 20x realtime on Apple Silicon
     model = onnx_asr.load_model(args.model, providers=["CPUExecutionProvider"]).with_vad(
         onnx_asr.load_vad("silero"), threshold=args.vad_threshold).with_timestamps()
     for src in map(Path, args.sources):

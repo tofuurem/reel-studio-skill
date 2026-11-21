@@ -5,7 +5,7 @@ import { Pill } from "./Board";
 import { Backdrop, Camera, FactCard, Figure, GridFloor, Layer, PriceTag, RollPill, ScanSwap, countUp, fmt, sp, steps } from "./Motion";
 
 /**
- * EXAMPLE (lofiroom ep2, chapter 03 «Tripo») — copy into reel/src/scenes/ and adapt. One continuous scene instead of
+ * EXAMPLE (a devlog chapter «Tripo») — copy into reel/src/scenes/ and adapt. One continuous scene instead of
  * two boards: picture → scan → 3D model (same box, the model is born from the picture) → price tag counts up →
  * the same model slides aside for the comparison with Claude's v2 → camera leans in and the problems are shown ON the model.
  * All cues are LOCAL frames of the scene's <Sequence> (reelgen: `c = {k: R.fw(...) - start}`), like every component.

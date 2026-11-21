@@ -8,8 +8,8 @@ Usage: work/dfvenv/bin/python -I dialogue.py <project> [--cutlist work/cutlist.j
                                             [--keep-raw] [--force]
 Run after gen_timeline.py (any cut-list change → re-run; doctor.py says when it is stale). Prints DIALOGUE_DONE.
 
-Why (2026-11-07 audit of the reel-studio reel): the voice reached the render as per-clip AAC proxies switched hard on every
-cut, levelled by three compressors in a row and encoded four times. Here, from the restored voice of voice_clean.py (float,
+Why: per-clip AAC proxies switched hard on every cut, levelled by three compressors in a row and encoded four times,
+sound broken. Here, from the restored voice of voice_clean.py (float,
 never encoded):
 1. Assembly, sample-accurate on the cut list's frames: every main-track segment's source range is placed at its timeline
    position; a jump cut gets an equal-power crossfade of cutXfadeMs taken from the source handles (no click, no gap), two
@@ -18,7 +18,7 @@ never encoded):
 2. Levels: each take's active speech to voiceTargetDb (≤ voiceMaxGain up), each segment nudged into [voiceSegLo,
    voiceSegHi] (± voiceSegMax); "amb" segments add the camera's own sound at ambDb kept out from under every word, "raw"
    ones use the camera sound at rawDb instead of the cleaned voice (plan.json opts; see event-vlog.md). A picture beat
-   with no word in its source range (Halloween v4: an Action 5 Pro on the handlebar, wind only, no transcript) needs no
+   with no word in its source range (a handlebar-mounted camera, wind only, no transcript) needs no
    restored voice: it is the camera sound at ambDb over room tone (its "voice" was the wind at full level).
 3. Room tone: gaps and muted slivers are filled with the quietest stretch of the neighbouring take (looped) — never
    digital silence between words.
@@ -31,9 +31,9 @@ never encoded):
    the incoming one starts bridgeLead s before its picture (J), both at ambDb, faded, kept out from under every word —
    the place changes before or after the picture does, so the cut feels like one event (event-vlog.md).
 7. A picture beat sped up ambRealtimeSpeed× or more (a ride as a time-lapse) plays its camera sound in REAL time from the
-   beat's first second — the wind and the engine as they were; time-stretched ×15 it was a grinding texture (Halloween v5).
+   beat's first second — the wind and the engine as they were; time-stretched ×15 it becomes a grinding texture.
 8. Digital zeros inside a take (a radio-mic dropout in the source, the edge of a cleaned voice window) longer than
-   dropoutMs count as a hole: the room tone fills it like a gap (c0081: 0.5 s of zeros read as a broken frame); the
+   dropoutMs count as a hole: the room tone fills it like a gap (0.5 s of zeros reads as a broken file); the
    camera sound under a picture beat or a bridge fills its own dropouts from the stretch just before (patch_dropouts).
 9. Optional per-project voice decisions, work/voice_tune.json (no file = everything below OFF, the stem as before):
    {"leveler": true | {"amount", "max_db"}}  a slow leveler over the placed speech (before room tone, not on amb/raw/bridges)
@@ -198,7 +198,7 @@ def main():
     # a picture beat with no word in its source range (an action cam on the handlebar: wind; no transcript at all) has no
     # voice to restore — its "restored voice" would be the wind at full level; it plays the camera's sound at ambDb and the
     # room tone fills under it. A beat WITH words keeps its restored voice: on lav clips the camera track is the same lavs,
-    # gated under every word, so dropping the voice left holes (Halloween v4 first render)
+    # gated under every word, so dropping the voice would leave holes
     for it in items:
         it["pic"] = False
         if it["kind"] == "amb" and not it["vo"]:

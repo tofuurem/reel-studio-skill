@@ -14,6 +14,7 @@
 #   -m  override Codex model
 #
 # Prints the absolute path of every saved image, one per line, on stdout.
+[[ "${1:-}" == "-h" || "${1:-}" == "--help" ]] && { awk 'NR>1 && /^#/ {sub(/^# ?/, ""); print; next} NR>1 {exit}' "$0"; exit 0; }
 set -euo pipefail
 
 out_dir=""; name="image"; count=1; transparent=0; model=""

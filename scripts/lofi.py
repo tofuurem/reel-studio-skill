@@ -1,6 +1,10 @@
 # Procedural lo-fi bed: 76 BPM, swung hats, soft kick/snare, muffled jazzy chords, vinyl crackle.
-import numpy as np, wave, struct, sys
-OUT = sys.argv[1] if len(sys.argv) > 1 else 'work/lofi.wav'  # usage: lofi.py <out.wav> [seconds]
+import sys
+USAGE = "usage: lofi.py <out.wav> [seconds] [warm|night|bright|dusk|spooky]"
+if len(sys.argv) > 1 and sys.argv[1].startswith("-"):   # `lofi.py --help` once wrote a 14 MB WAV named «--help»
+    print(USAGE); sys.exit(0 if sys.argv[1] in ("-h", "--help") else 2)
+import numpy as np, wave, struct
+OUT =sys.argv[1] if len(sys.argv) > 1 else 'work/lofi.wav'  # usage: lofi.py <out.wav> [seconds]
 DUR_ARG = float(sys.argv[2]) if len(sys.argv) > 2 else None
 STYLE = sys.argv[3] if len(sys.argv) > 3 else 'warm'  # warm | night | bright | dusk | spooky (A harmonic minor: Am7 Fmaj7 Dm7 E7)
 PRESETS = {

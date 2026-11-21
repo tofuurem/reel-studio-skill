@@ -14,7 +14,7 @@ rewind and beep stay synthesized (the bank has no tape rewind or plain electroni
 """
 import argparse, json, os, shutil, subprocess, sys, tempfile
 
-BANK = {   # kind: (earshot id, render options) — chosen by ear on 2026-11-09 for calm reels and action reels
+BANK = {   # kind: (earshot id, render options) — chosen by ear for calm reels and action reels
     "tick": ("pro_hover_tick/detent", {}),
     "pop": ("pro_pop_in/round", {}), "pop2": ("pro_pop_in/airy", {}), "pop3": ("ui_pop/soft", {}),
     "done": ("pro_notify/ding_2045", {}),

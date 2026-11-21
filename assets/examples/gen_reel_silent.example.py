@@ -21,7 +21,7 @@ def shot(src, i):
                 tag("Pill", text=f"{i + 1} / {len(SHOTS)}", x=64, y=1380, at=R.L(grid[i] + 4, start), size=30)]
     return kids
 
-body = [rg.seq(grid[0], grid[0] + N["chapterLead"] + N["tagFrames"], tag("TitleCard", title="lofiroom", pill="как это выглядит", top=N["cardTop"] - 50), "title")]
+body = [rg.seq(grid[0], grid[0] + N["chapterLead"] + N["tagFrames"], tag("TitleCard", title="devlog", pill="как это выглядит", top=N["cardTop"] - 50), "title")]
 for i, src in enumerate(SHOTS):
     body.append(R.board(grid[i], grid[i + 1] + X, shot(src, i), f"board · shot {i + 1}", fade=(0 if i == 0 else None, None), cover=False))
 body += [

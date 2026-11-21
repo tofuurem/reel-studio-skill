@@ -10,13 +10,16 @@ Usage: python3 -I selfcheck.py [--verbose]
   interp      no script that imports numpy / PIL / torch … is documented with a bare `python3 -I`
   contracts   the template's Timeline.tsx stub exports the names gen_timeline.py writes (Timeline, TOTAL_FRAMES)
   lint        lint_reel.py on assets/remotion-template/src (errors fail, warnings are listed)
+  engines     engines.py imports with the standard library only, every capability resolves to a known engine, the label
+              vocabulary is there, the CLI answers --json and lists the capabilities other skills call
 Prints SELFCHECK_OK or the problems (exit 1).
 """
 import glob, os, re, subprocess, sys
 HERE = os.path.dirname(os.path.abspath(__file__)); SKILL = os.path.dirname(HERE)
 verbose = "--verbose" in sys.argv
 probs, notes = [], []
-VENV_MODULES = ("soundfile", "onnx_asr", "mlx_whisper", "whisper", "Vision", "Quartz", "Foundation", "mlx", "torch", "df", "objc")
+VENV_MODULES = ("soundfile", "onnx_asr", "mlx_whisper", "whisper", "Vision", "Quartz", "Foundation", "mlx", "torch", "df", "objc",
+                "numpy", "PIL", "scipy", "cv2", "rapidocr_onnxruntime", "onnxruntime", "mediapipe", "faster_whisper", "transformers", "ultralytics")
 
 def run(cmd, **kw): return subprocess.run(cmd, capture_output=True, text=True, **kw)
 
@@ -86,6 +89,24 @@ else:
 r = run([sys.executable, "-I", os.path.join(HERE, "lint_reel.py"), os.path.join(SKILL, "assets/remotion-template/src")])
 if r.returncode: probs.append("lint: " + " | ".join(l for l in r.stdout.splitlines() if "ERROR" in l or l.startswith("LINT")))
 elif "warnings=" in r.stdout: notes.append("lint (template): " + r.stdout.strip().splitlines()[-1] + ("\n  " + "\n  ".join(r.stdout.strip().splitlines()[:-1]) if verbose else ""))
+
+# engines: the adapter other skills import (video-library) — stdlib at import, a known engine per capability, the CLI contract
+r = run([sys.executable, "-I", "-c", "import sys; sys.path.insert(0, sys.argv[1]); import engines; "
+         "bad = [m for m in ('numpy', 'torch', 'PIL', 'cv2', 'Vision', 'transformers') if m in sys.modules]; "
+         "print('HEAVY', *bad) if bad else None; "
+         "[engines._check(c, engines.default(c), 'default') for c in engines.ENGINES]; print('ENGINES_IMPORT_OK')", HERE])
+if "ENGINES_IMPORT_OK" not in r.stdout or "HEAVY" in r.stdout: probs.append("engines: " + (r.stdout + r.stderr).strip()[-300:])
+if not os.path.exists(os.path.join(HERE, "engines_labels.txt")) or sum(1 for l in open(os.path.join(HERE, "engines_labels.txt")) if l.strip() and not l.startswith("#")) < 100:
+    probs.append("engines: engines_labels.txt missing or nearly empty (the siglip vocabulary)")
+r = run([sys.executable, "-I", os.path.join(HERE, "engines.py"), "--json"], env={**os.environ, "REEL_STUDIO_ENGINES_REEXEC": "1"}, timeout=60)
+try:
+    import json as _json; caps = {x["cap"] for x in _json.loads(r.stdout)}
+    if caps != {"faces", "people", "hands", "ocr", "feature_print", "labels", "aesthetics", "person_mask", "cutout", "sound_events", "whisper", "vlm", "decode"}:
+        probs.append(f"engines: --json capabilities changed: {sorted(caps)}")
+except ValueError: probs.append("engines: engines.py --json does not print JSON: " + (r.stdout + r.stderr).strip()[-200:])
+r = run([sys.executable, "-I", os.path.join(HERE, "engines.py"), "faces", "--help"], env={**os.environ, "REEL_STUDIO_ENGINES_REEXEC": "1"})
+for c in ("faces", "people", "ocr", "labels", "feature_print", "sound_events"):   # the CLI video-library calls
+    if c not in r.stdout: probs.append(f"engines: the CLI lost the capability {c}")
 
 for x in notes: print("note:", x)
 for x in probs: print("PROBLEM:", x)

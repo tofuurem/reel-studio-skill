@@ -1,24 +1,35 @@
 """Bleeps of a censored cut → work/bleeps_censored.json (cut_from_transcript.py's bleeps format, timeline ms).
 
-Usage: python3 -I censor_bleeps.py <project> [--swears work/bleeps.json] [--no-drugs]
+Usage: python3 -I censor_bleeps.py <project> [--swears work/bleeps.json] [--no-extra]
 Run after cut_from_transcript.py (keep a copy of its work/bleeps.json — the uncensored cut empties it). Bleeps = every
-swear that list has + the rude words swear.py does not count (CENSOR_WORDS: «сука», «наркоман») + the weed and mushroom
-talk (DRUG_WORDS: «курим», «накуривается», «косяки», «грибов» …), found in the cut's own words (work/new/c<id>.json).
-Neighbours closer than 350 ms merge. Then: dialogue.py <project> --bleeps work/bleeps_censored.json
---out reel/public/audio/dialogue_censored.wav (the uncensored stem stays), and captions through censor_text().
-Why: Halloween vlog censored (2026-11-09, YouTube + family) — «накуривается, грибов объешься — запикать».
+swear that list has + the rude words swear.py does not count (CENSOR_WORDS) + the project's own topic words
+(EXTRA_WORDS: work/censor_words.txt, one regex per line, matched against the lower-cased word with ё → е, «#» comments),
+found in the cut's own words (work/new/c<id>.json). Use it to bleep listed words for a family-safe or platform-safe cut;
+--no-extra bleeps swears and CENSOR_WORDS only. Neighbours closer than 350 ms merge. Then: dialogue.py <project>
+--bleeps work/bleeps_censored.json --out reel/public/audio/dialogue_censored.wav (the uncensored stem stays), and captions
+through censor_text().
 """
 import json, os, re, sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from clipid import clip_id  # noqa: E402
 
 CENSOR_WORDS = re.compile(r"^(сук[аиуое]?|сучк\w*|наркоман\w*|долбо[её]б\w*)$", re.I)
-DRUG_WORDS = re.compile(r"(косяк|кисяк|косяч|накур|раскур|^курим$|^курит|покур|^трав[аук]|шишк|ганж|каннабис|гриб|^дунуть|^дунем|затяж|бошк)", re.I)
+EXTRA_WORDS = re.compile(r"(?!)")   # nothing until load_extra() reads the project's work/censor_words.txt
+
+
+def load_extra(path="work/censor_words.txt"):
+    """The project's topic words (one regex per line, «#» comments) → EXTRA_WORDS; no file = no extra words."""
+    global EXTRA_WORDS
+    pats = [ln.strip() for ln in open(path, encoding="utf-8") if ln.strip() and not ln.lstrip().startswith("#")] if os.path.exists(path) else []
+    EXTRA_WORDS = re.compile("|".join(f"(?:{p})" for p in pats), re.I) if pats else re.compile(r"(?!)")
+    return len(pats)
+
+
 core = lambda w: re.sub(r"[^\wа-яё-]", "", w.lower().replace("ё", "е"))
 
 
 def is_extra(word):
-    c = core(word); return bool(CENSOR_WORDS.match(c) or DRUG_WORDS.search(c))
+    c = core(word); return bool(CENSOR_WORDS.match(c) or EXTRA_WORDS.search(c))
 
 
 def censor_text(t):
@@ -30,9 +41,10 @@ def censor_text(t):
 
 if __name__ == "__main__":
     import argparse
-    ap = argparse.ArgumentParser(); ap.add_argument("project"); ap.add_argument("--swears", default="work/bleeps.json"); ap.add_argument("--no-drugs", action="store_true")
+    ap = argparse.ArgumentParser(); ap.add_argument("project"); ap.add_argument("--swears", default="work/bleeps.json"); ap.add_argument("--no-extra", action="store_true")
     a = ap.parse_args(); os.chdir(a.project)
-    if a.no_drugs: DRUG_WORDS = re.compile(r"(?!)")
+    n_extra = 0 if a.no_extra else load_extra()
+    print(f"{n_extra} extra word patterns (work/censor_words.txt)")
     cl = json.load(open("work/cutlist.json")); fps = cl["fps"]
     out = list(json.load(open(a.swears)) if os.path.exists(a.swears) else [])
     for s in cl["main"]:

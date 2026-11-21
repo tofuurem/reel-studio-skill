@@ -3,6 +3,7 @@
 # Usage: folder_sheet.sh "<folder>" <out.jpg> [lut.cube]
 # Use it to scout b-roll in neighbouring shoot folders before transcoding anything. Tiles follow the printed order
 # ("1 DJI_…_0005_D.MP4 …"); DJI reuses its 4-digit counter across days, so tiles are keyed by position, not by counter.
+[[ "${1:-}" == "-h" || "${1:-}" == "--help" ]] && { awk 'NR>1 && /^#/ {sub(/^# ?/, ""); print; next} NR>1 {exit}' "$0"; exit 0; }
 set -e; setopt null_glob
 DIR=$1; OUT=$2; LUT=$3; TMP=$(mktemp -d); SK=$(cd "$(dirname "$0")" && pwd); HDRD=$HOME/.cache/reel-studio/luts
 case "$OUT" in /*) ;; *) OUT="$PWD/$OUT";; esac   # the script cd's into the footage folder

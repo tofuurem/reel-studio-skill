@@ -2,9 +2,10 @@ import React from "react";
 import { Video } from "@remotion/media";
 import { AbsoluteFill, Easing, interpolate, staticFile, useCurrentFrame, useVideoConfig } from "remotion";
 import { N } from "../numbers";
-import { footagePath } from "../theme";
+import { footagePath, safe } from "../theme";
 import { envelope } from "../ui/anim";
 import { BehindTitle, MatteLayer } from "./BehindTitle";
+import { Credit } from "./Cards";
 
 type Props = {
   src: string;
@@ -17,13 +18,15 @@ type Props = {
   fadeOut?: number;
   /** A title behind the person (reelgen.cutaway(..., behind={...}) makes the matte with person_matte.py). Local frames. */
   behind?: { matte: string; title: string; kicker?: string; at?: number; until?: number; y?: number; x?: number; scale?: number };
+  /** Someone else's footage (styles.md «real footage»): the author's credit in the corner, «gameplay: Author · YouTube». */
+  credit?: string;
   children?: React.ReactNode;
 };
 
 /** Full-frame cutaway over the talking head. Audio keeps coming from the main timeline.
  *  Its Sequence should start ≥ N.coverBefore frames before the cut it covers and end ≥ N.coverAfter after it
  *  (reelgen.cover() / reelgen.cutaway() widen the range) and carry premountFor (reelgen does). */
-export const BRoll: React.FC<Props> = ({ src, trimBefore, zoomFrom = 1, zoomTo = 1.08, fadeIn = N.layerFade, fadeOut = N.layerFade, behind, children }) => {
+export const BRoll: React.FC<Props> = ({ src, trimBefore, zoomFrom = 1, zoomTo = 1.08, fadeIn = N.layerFade, fadeOut = N.layerFade, behind, credit, children }) => {
   const frame = useCurrentFrame();
   const { durationInFrames } = useVideoConfig();
   return (
@@ -34,6 +37,7 @@ export const BRoll: React.FC<Props> = ({ src, trimBefore, zoomFrom = 1, zoomTo =
         {behind ? <MatteLayer src={behind.matte} /> : null}
         {behind?.kicker ? <BehindTitle part="front" title={behind.title} kicker={behind.kicker} at={behind.at ?? 4} until={behind.until ?? durationInFrames} y={behind.y} x={behind.x} scale={behind.scale} /> : null}
       </AbsoluteFill>
+      {credit ? <div style={{ position: "absolute", left: safe.x, top: safe.top + 20 }}><Credit text={credit} corner="tl" /></div> : null}
       {children}
     </AbsoluteFill>
   );

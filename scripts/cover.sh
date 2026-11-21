@@ -6,6 +6,7 @@
 # the fonts are copied into <covers-public-dir>/fonts on every run.
 # The comps must take a `guides` prop (CoverFrame guides={guides}); the check sheet shows the 3:4 (cyan) and 1:1 (yellow) crops —
 # look at it before sending: the face and the word must sit inside the yellow box.
+[[ "${1:-}" == "-h" || "${1:-}" == "--help" ]] && { awk 'NR>1 && /^#/ {sub(/^# ?/, ""); print; next} NR>1 {exit}' "$0"; exit 0; }
 set -e -o pipefail
 P=$(cd "$1" && pwd); PUB=$(cd "$2" && pwd); OUT=$3; shift 3; T=$(mktemp -d)
 # the template loads its fonts from public/fonts (fonts.ts) — the covers public dir needs them too, or every still fails with a 404

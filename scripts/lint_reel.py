@@ -13,6 +13,8 @@ WARN:
 A line ending with `// lint-ok` (or a JSX comment {/* lint-ok */}) is skipped — write why next to it.
 Prints file:line: LEVEL rule — snippet, then LINT_OK or LINT errors=N warnings=M.
 """
+import sys as _sys
+if __name__ == "__main__" and ("-h" in _sys.argv[1:] or "--help" in _sys.argv[1:]): print(__doc__); _sys.exit(0)   # usage, no side effects
 import os, re, sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from common import N

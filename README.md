@@ -17,12 +17,14 @@ git clone https://github.com/tofuurem/reel-studio-skill ~/.claude/skills/reel-st
 python3 -I ~/.claude/skills/reel-studio/scripts/deps.py --install
 ```
 
-`deps.py` сам определяет систему и ставит ffmpeg, node, uv и Python-окружения. Без флагов он только проверяет, чего не хватает. Есть два необязательных флага:
+`deps.py` сам определяет систему и ставит ffmpeg, node, uv и Python-окружения. Без `--install` он только проверяет, чего не хватает. Флаги `--with`:
 
-- `--with covers` ставит Codex CLI для сгенерированных обложек, нужен вход через `codex login`;
-- `--with sound` ставит [earshot](https://github.com/Leonxlnx/earshot).
+- `covers` — Codex CLI для сгенерированных обложек, нужен вход через `codex login`;
+- `sound` — [earshot](https://github.com/Leonxlnx/earshot);
+- `linux-vision` — открытые модели для картинки (на Linux ставятся сами, флаг не нужен; на macOS — по желанию);
+- `fast-asr` — faster-whisper, быстрый Whisper для языков кроме русского.
 
-Всё работает на macOS с Apple Silicon. На Intel-Маке нет описания кадров. На Linux и WSL2 нет ещё и того, что держится на Apple Vision: кадрирования по людям, титра за человеком и вырезанных обложек. Windows поддерживается только через WSL2.
+Всё работает на macOS с Apple Silicon. Linux (в том числе серверы без экрана) и WSL2 тоже поддерживаются, процессор или NVIDIA: модель для каждой задачи выбирается отдельно, вместо Apple Vision — открытые модели ([references/engines.md](references/engines.md)). Windows — только через WSL2.
 
 ## Обновление
 
@@ -46,6 +48,7 @@ python3 -I ~/.claude/skills/reel-studio/scripts/deps.py --install
 - **Монтаж и графика.** Кадрирует по людям, ставит титр за человеком, добавляет моушн-сцены, главы и обложки. Делает переходы и следит, чтобы эффектов не было слишком много подряд.
 - **Звук.** Подкладывает тихий фоновый трек. Звуковые эффекты синтезирует сам, берёт из earshot или находит настоящие записи на [Openverse](https://openverse.org).
 - **Цензурная версия.** Делает вторую версию того же монтажа: мат запикан, лишнее в кадре размыто.
+- **Чужие видео** (`fetch.py --as footage`) — только с разрешения владельца или по лицензии, которая разрешает повторное использование; соблюдай правила площадки.
 - **Проверки.** До и после рендера проверяет громкость, выпавшие кадры и склейки. Если неясно, какой вариант лучше, собирает короткий A/B.
 
 **Что скачивает при первом использовании**
@@ -56,7 +59,9 @@ python3 -I ~/.claude/skills/reel-studio/scripts/deps.py --install
 | Whisper large-v3-turbo | расшифровка речи на других языках | ≈ 1,6 ГБ |
 | DeepFilterNet 3 | чистка голоса | ≈ 8 МБ |
 | earshot (с `--with sound`) | библиотека эффектов и проверка «на слух» | ≈ 1,6 ГБ |
-| Qwen3-VL-8B (необязательно, Claude спросит) | описание кадров, только Apple Silicon | ≈ 5,4 ГБ |
+| Qwen3-VL (необязательно, Claude спросит) | описание кадров: MLX на Apple Silicon, иначе transformers или llama.cpp; модель — `engines.py set-model vlm …` | 8B ≈ 5,4 ГБ, 2B ≈ 4,5 ГБ |
+| Linux: SigLIP 2, BiRefNet, AST | метки кадров, вырезание людей, звуки | ≈ 1,5 ГБ, ≈ 420 МБ, ≈ 350 МБ |
+| Linux: RT-DETR, DINOv2, YuNet, RapidOCR, MediaPipe | люди, похожие кадры, лица, текст, руки | ≈ 80 МБ, ≈ 90 МБ, < 1 МБ, ≈ 15 МБ, ≈ 8 МБ |
 
 LUT камеры в репозиторий не входит, подробности в [assets/luts](assets/luts/README.md). Полная инструкция скилла лежит в [SKILL.md](SKILL.md).
 

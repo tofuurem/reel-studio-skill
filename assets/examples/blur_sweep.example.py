@@ -1,10 +1,10 @@
-"""Dense check of the joint blur in a FINISHED censored render (example from the Halloween vlog, 2026-11-13: mid-patch
-stills had passed while six joints still showed — copy to work/audit/ and run from the project folder).
+"""Dense check of the blur in a FINISHED censored render (mid-patch stills can pass while the target still shows between
+them — copy to work/audit/ and run from the project folder).
 
 For every censor patch in reel/src/Reel.tsx (sign patches skipped) it takes frames every STEP seconds from PAD seconds
 before the patch to PAD seconds after it, from the censored render and from the uncensored one (same cut, same
 captions). Where they differ is the blur; each tile is a crop around that spot (the patch's union box outside it),
-so a joint sticking out of the blur, or one in view before/after the patch, is visible on the sheet.
+so a target sticking out of the blur, or one in view before/after the patch, is visible on the sheet.
 
     work/venv/bin/python -I work/audit/blur_sweep.py <censored.mp4> <uncensored.mp4> [out_dir] [--only a,b] [--offset s]
 → <out_dir>/<patch>_<n>.jpg sheets (6 columns), <out_dir>/index.tsv (sheet, tile, time, inside patch)
@@ -19,7 +19,7 @@ PAD = 1.5             # s before / after each patch
 W, H = 1280, 720      # decode size (half of 2K)
 TILE_W = 420
 COLS, ROWS = 6, 5
-SIGNS = set()        # patch names to skip (Halloween v5 skipped its sign jobs this way); or pass --only a,b
+SIGNS = set()        # patch names to skip (e.g. sign jobs); or pass --only a,b
 
 args = sys.argv[1:]
 only = None
